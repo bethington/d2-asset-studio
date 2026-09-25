@@ -1,0 +1,405 @@
+:root {
+  --bg: #14100c; --panel: #201a12; --panel2: #2a2318; --ink: #e8dcc0;
+  --muted: #a89878; --gold: #c9a44a; --line: #3a3020; --accent: #6fae4f;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
+}
+header {
+  display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+  background: linear-gradient(#241d13, #1a150e); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 5;
+}
+h1 { font-size: 18px; margin: 0; color: var(--gold); letter-spacing: .5px; }
+.game { font-size: 12px; color: var(--muted); }
+.game.ok { color: var(--accent); }
+.game.bad { color: #c96a4a; }
+.game .meshy-login,
+.game .game-launch { color: inherit; text-decoration: underline; cursor: pointer; }
+.game .meshy-login:hover,
+.game .game-launch:hover { color: #e08a68; }
+.actions { margin-left: auto; display: flex; gap: 8px; }
+button {
+  background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+  padding: 7px 12px; border-radius: 5px; cursor: pointer; font-size: 13px;
+}
+button:hover { border-color: var(--gold); }
+button:disabled { opacity: .5; cursor: default; }
+.toolbar {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+input[type=search], select {
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  padding: 7px 10px; border-radius: 5px; font-size: 13px;
+}
+input[type=search] { width: 320px; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; }
+main { display: flex; align-items: flex-start; }
+/* three named columns: 1 Gallery (flex) / 2 Details (360px) / 3 Generate (360px) */
+.gridcol { flex: 1; min-width: 0; }
+.colhead {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted);
+  padding: 9px 4px; margin: 0 0 4px;
+}
+/* Details/Generate colheads sit inside a padded, scrolling, sticky-positioned column —
+   stick to that column's own top (not the page's) so the label stays visible while its
+   content scrolls, flush to the edges via negative margins that cancel the parent's padding. */
+.detail > .colhead, .workflow-panel > .colhead {
+  position: sticky; top: -16px; margin: -16px -16px 10px; padding: 10px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--line); z-index: 1;
+}
+/* grouped gallery tree (Armor / Weapons / Class-Specific / Other -> subcats -> family rows) */
+.grid { flex: 1; padding: 8px 16px 24px; min-width: 0; }
+.ghead {
+  font-size: 15px; color: var(--gold); cursor: pointer; user-select: none;
+  padding: 9px 4px 7px; margin-top: 10px; border-bottom: 1px solid var(--line);
+}
+.ghead:hover, .shead:hover { filter: brightness(1.2); }
+.cnt { color: var(--muted); font-size: 11px; margin-left: 10px; font-weight: normal; }
+.shead {
+  font-size: 13px; color: var(--ink); cursor: pointer; user-select: none;
+  padding: 7px 4px 5px 16px;
+}
+.sbody { padding: 2px 0 10px 30px; }
+/* third nesting level (e.g. Maps -> Tier N): lighter head, extra indent, no double top margin */
+.subcat.subsub > .shead { font-size: 12px; color: var(--muted); padding-left: 26px; margin-top: 2px; }
+.subcat.subsub > .sbody { padding-left: 22px; }
+.famrow {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start;
+  padding: 6px 0; border-bottom: 1px dotted #2c2517;
+}
+.famrow:last-child { border-bottom: 0; }
+.vsep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 5px; }
+.singles { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0; }
+.tile {
+  position: relative; width: 88px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 4px 4px;
+  text-align: center; cursor: pointer; transition: border-color .1s;
+}
+.tile:hover { border-color: var(--gold); }
+.tile.modded { border-color: var(--accent); }
+.tile.hit { box-shadow: 0 0 0 1px var(--gold); }
+.tile .tthumb { height: 46px; display: flex; align-items: center; justify-content: center; }
+.tile img { max-height: 46px; max-width: 100%; image-rendering: pixelated; }
+.tile .tnm { font-size: 10px; color: var(--ink); margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip {
+  position: absolute; top: 2px; right: 2px; font-size: 8px; line-height: 1.3;
+  padding: 0 3px; border-radius: 3px; background: #241d12;
+  color: var(--muted); border: 1px solid var(--line); pointer-events: none;
+}
+.chip.x { color: #b8c4d8; }
+.chip.e { color: #d8a468; }
+.chip.u { color: #d8b25a; border-color: #6a5a28; }
+.chip.s { color: #7fd06a; border-color: #3f6a33; }
+
+.detail {
+  width: 360px; min-height: calc(100vh - 100px); max-height: calc(100vh - 90px);
+  overflow-y: auto; background: var(--panel);
+  border-left: 1px solid var(--line); padding: 16px; position: sticky; top: 90px;
+}
+
+/* ---- AI upscale -> 3D workflow panel (column 3 · Generate) ---- */
+.workflow-panel {
+  width: 360px; min-height: calc(100vh - 100px); max-height: calc(100vh - 90px);
+  overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 16px; position: sticky; top: 90px;
+}
+.wf-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.wf-head h2 { margin: 0; font-size: 15px; color: var(--gold); flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-sub { color: var(--muted); font-size: 11px; margin-bottom: 10px; }
+.wf-section { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px;
+  background: var(--panel2); overflow: hidden; }
+.wf-section.disabled { opacity: .5; pointer-events: none; }
+.wf-shead { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: rgba(255,255,255,.02); font-size: 12px; font-weight: 600; color: var(--gold); }
+.wf-shead .num { width: 18px; height: 18px; border-radius: 50%; background: var(--panel);
+  border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--muted); }
+.wf-chip { margin-left: auto; font-size: 10px; padding: 1px 7px; border-radius: 10px;
+  border: 1px solid var(--line); color: var(--muted); }
+.wf-chip.done { color: #7fd18a; border-color: #2f6b38; }
+.wf-chip.busy { color: var(--gold); border-color: var(--gold); }
+.wf-body { padding: 10px; }
+.wf-src { display: flex; gap: 10px; }
+.wf-src .thumb { width: 92px; height: 92px; flex: 0 0 auto; border: 1px solid var(--line);
+  border-radius: 6px; }
+.wf-src .thumb img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.wf-desc { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.wf-desc textarea { width: 100%; min-height: 96px; resize: vertical; font-size: 11px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px; font-family: inherit; }
+.wf-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 12px; }
+.wf-row label { color: var(--muted); width: 74px; flex: 0 0 auto; }
+.wf-row input[type=range] { flex: 1; }
+.wf-row .val { width: 30px; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+.wf-panel-full { width: 100%; box-sizing: border-box; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px; font-size: 12px;
+  font-family: inherit; }
+.wf-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.wf-tab { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0;
+  color: var(--muted); padding: 6px 12px; font-size: 12px; cursor: pointer; }
+.wf-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.wf-tab:hover { border-color: transparent; border-bottom-color: var(--line); }
+.wf-tab.active:hover { border-bottom-color: var(--gold); }
+.wf-thumb .badge { position: absolute; top: 2px; left: 2px; background: rgba(0,0,0,.65);
+  color: var(--gold); border-radius: 3px; font-size: 10px; line-height: 1; padding: 2px 4px;
+  pointer-events: none; }
+.wf-picker { display: flex; flex-direction: column; gap: 4px; }
+.wf-pickopt { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink);
+  cursor: pointer; padding: 3px 4px; border-radius: 5px; }
+.wf-pickopt:hover { background: rgba(255,255,255,.03); }
+.wf-pickopt input[type=radio] { accent-color: var(--gold); flex: 0 0 auto; }
+.wf-thumb .wf-score { position: absolute; top: 2px; left: 2px; background: rgba(0,0,0,.7);
+  color: var(--gold); border: 1px solid rgba(216,175,84,.4); border-radius: 3px; font-size: 10px;
+  font-variant-numeric: tabular-nums; line-height: 1; padding: 2px 4px; pointer-events: none; }
+.wf-gen { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.wf-gen .seedbox { width: 96px; }
+.wf-strip { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 4px; }
+.wf-thumb { position: relative; flex: 0 0 auto; width: 76px; }
+.wf-thumb .t { width: 76px; height: 76px; border: 1px solid var(--line); border-radius: 6px;
+  background-image: linear-gradient(45deg,#2a2a30 25%,transparent 25%),
+    linear-gradient(-45deg,#2a2a30 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#2a2a30 75%),
+    linear-gradient(-45deg,transparent 75%,#2a2a30 75%);
+  background-size: 12px 12px; background-position: 0 0,0 6px,6px -6px,-6px 0; cursor: pointer; }
+.wf-thumb .t img { width: 100%; height: 100%; object-fit: contain; }
+.wf-thumb.sel .t { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.wf-thumb .x { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,.6); color: #fff;
+  border: none; border-radius: 3px; font-size: 10px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+.wf-thumb .cap { font-size: 9px; color: var(--muted); text-align: center; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line);
+  border-top-color: var(--gold); border-radius: 50%; animation: wfspin .7s linear infinite; }
+@keyframes wfspin { to { transform: rotate(360deg); } }
+.wf-3dhost { height: 260px; margin-top: 8px; border: 1px solid var(--line); border-radius: 6px;
+  overflow: hidden; background: #17130d; }
+.wf-3dhost canvas { display: block; }
+/* glove single-hand mask brush (ported from the removed /studio power tool) */
+.wf-maskwrap {
+  background-image: linear-gradient(45deg,#2a2620 25%,transparent 25%),linear-gradient(-45deg,#2a2620 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#2a2620 75%),linear-gradient(-45deg,transparent 75%,#2a2620 75%);
+  background-size: 16px 16px; background-position: 0 0,0 8px,8px -8px,-8px 0; background-color: #1c1913;
+  border: 1px solid var(--line); line-height: 0; max-width: 100%; overflow: auto; text-align: center;
+}
+.wf-maskwrap canvas { image-rendering: pixelated; cursor: crosshair; touch-action: none; display: inline-block; max-width: 100%; }
+.wf-masktools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.wf-masktools label { display: flex; align-items: center; gap: 5px; }
+.wf-masktools input[type=range] { width: 80px; }
+.wf-selbig { margin-top: 8px; text-align: center; border-radius: 8px; padding: 6px; }
+.wf-selbig img { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain;
+  image-rendering: auto; border: 1px solid var(--line); border-radius: 6px; }
+/* §2 "accept image as art" (skip 3D): confirm box shows the true fitted DC6 preview.
+   #wf2dConfirm uses the .appanel class directly (see below) -- same outer box as the alternate
+   inspector's adjust panel, not just the same inner controls. */
+.wf-2d { margin-top: 6px; }
+/* Item-tab big preview: the selected artwork shown large below the thumbnail strip.
+   Alternates with a hi-res master render smooth; sprites (.pix) scale up crisp/blocky. */
+.itembig { margin: 8px 0 12px; text-align: center; border-radius: 8px; padding: 8px; }
+.itembig:empty { display: none; }
+.itembig img { display: block; width: 100%; height: auto; max-height: 52vh; object-fit: contain;
+  image-rendering: auto; border: 1px solid var(--line); border-radius: 6px; }
+.itembig img.pix { image-rendering: pixelated; }
+.itembig .biglbl { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.detail h2 { margin: 0 0 4px; font-size: 16px; color: var(--gold); }
+.detail .meta { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+.variants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.variant {
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px; text-align: center;
+  cursor: pointer; background: var(--panel2);
+}
+.variant.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* previewing = gold outline, distinct from the green ACTIVE outline; both = green ring + gold halo */
+.variant.previewing { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.variant.active.previewing { box-shadow: 0 0 0 1px var(--accent), 0 0 0 3px var(--gold); }
+/* activation checkbox, upper-LEFT (the ⋯ menu sits upper-right) */
+.variant .actbox { position: absolute; top: 3px; left: 3px; z-index: 2; margin: 0; line-height: 0; }
+.variant .actbox input { accent-color: var(--accent); cursor: pointer; opacity: .5; width: 15px; height: 15px; }
+.variant .actbox input:checked, .variant:hover .actbox input { opacity: 1; }
+.variant .thumb { height: 56px; display: flex; align-items: center; justify-content: center; }
+.variant img { max-height: 56px; image-rendering: pixelated; }
+.variant .lbl { font-size: 10px; color: var(--muted); margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* "shared by N" hint above the strip: these alternates are pooled per DC6 file */
+.sharedbadge { font-size: 11px; color: var(--muted); margin: 0 0 8px;
+  padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--panel2); display: inline-block; cursor: help; }
+.sharedbadge b { color: var(--gold); font-weight: 600; }
+/* horizontal variant strip (original + alternates + the "+ add" card) */
+.stripwrap { position: relative; }
+.variants.strip { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 6px; scrollbar-width: thin; }
+.variants.strip .variant { flex: 0 0 92px; width: 92px; position: relative; }
+/* edge fades hint at clipped cards; .can-left/.can-right toggled by wireStrip() on scroll */
+.stripwrap::before, .stripwrap::after {
+  content: ""; position: absolute; top: 0; bottom: 6px; width: 26px; z-index: 1;
+  pointer-events: none; opacity: 0; transition: opacity .15s;
+}
+.stripwrap::before { left: 0; background: linear-gradient(90deg, var(--panel), transparent); }
+.stripwrap::after { right: 0; background: linear-gradient(270deg, var(--panel), transparent); }
+.stripwrap.can-left::before { opacity: 1; }
+.stripwrap.can-right::after { opacity: 1; }
+/* ⋯ rename/delete affordance on alternate cards (hover to reveal) */
+.variant .dots {
+  position: absolute; top: 2px; right: 2px; z-index: 2; padding: 0 5px;
+  font-size: 12px; line-height: 1.4; border-radius: 3px; opacity: 0; transition: opacity .1s;
+}
+.variant:hover .dots, .variant .dots:focus { opacity: 1; }
+.altmenu {
+  position: fixed; z-index: 50; min-width: 118px; display: flex; flex-direction: column;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .55); overflow: hidden;
+}
+.altmenu button { border: 0; border-radius: 0; background: none; text-align: left; padding: 7px 12px; }
+.altmenu button:hover { background: var(--panel); }
+/* alternate inspector: provenance + adjustment sliders shown while PREVIEWING an alternate */
+.altinspect { margin: 8px 0 4px; }
+.altinspect.hidden { display: none; }
+.altinspect .linkbtn { font-size: 11px; padding: 1px 8px; }
+.altinspect .adjnote { padding: 8px 10px; }
+
+/* Shared adjust panel (adjpanel.js renderAdjPanel/wireAdjPanel) -- framing + colour sliders,
+   original/adjusted compare, action buttons. .appanel is the shared outer box, used identically
+   by both the alternate inspector and the workflow accept-2d confirm step (#wf2dConfirm). */
+.appanel { margin-top: 8px; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; }
+.ap-note { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.ap-compare { display: flex; gap: 10px; justify-content: center; align-items: flex-end; margin-bottom: 8px; }
+/* Fixed (not container-relative) so both panels render at the identical pixel size regardless of
+   which one has more horizontal room -- a percentage/max-width here previously made the same
+   markup render at two different sizes (137px vs 190px) depending on the surrounding panel's
+   width. 140px is the largest that fits the narrower of the two panels (item inspector, ~305px
+   row) with its gap. */
+.ap-compare figure { margin: 0; text-align: center; width: 140px; }
+/* width-driven, not max-height: these source images are ~116px (server renders cell_size*4) --
+   max-height alone is a ceiling that never enlarges a smaller image, so it silently did nothing. */
+.ap-compare img { width: 100%; height: auto; image-rendering: pixelated; display: block; }
+.ap-compare figcaption { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.ap-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 3px 0; }
+.ap-row label { color: var(--muted); width: 74px; flex: 0 0 auto; }
+.ap-row input[type=range] { flex: 1; }
+.ap-val { width: 40px; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ap-btns { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.ap-status { margin-left: auto; font-size: 12px; color: var(--muted); }
+/* "+ add alternate" card at the end of the strip */
+.variant.addcard {
+  border-style: dashed; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.variant.addcard .plus { font-size: 26px; line-height: 1; color: var(--gold); }
+.variant.addcard:hover, .variant.addcard.open { border-color: var(--gold); color: var(--ink); }
+.variant.addcard.open { background: var(--panel); }
+.variant.addcard.dragging, .addpanel.dragging { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* Floating overlay under the "+" card with the four add methods -- anchored to .stripwrap (which
+   is position:relative, see above) rather than to the card itself, since the card lives inside
+   the horizontally-scrolling .variants.strip and an overflow-x:auto ancestor would clip an
+   absolutely-positioned child. Anchored to the wrapper's right edge (not the card's exact scroll
+   position) since "+" is always the last/rightmost card -- matches the existing dropmenu pattern. */
+.addpanel {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30;
+  padding: 10px; background: var(--panel2); min-width: 280px; max-width: 90vw;
+  border: 1px solid var(--gold); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+}
+.addrow { display: flex; gap: 6px; flex-wrap: wrap; }
+.addhint { margin-top: 8px; margin-bottom: 0 !important; }
+.addpanel .uploader { margin-top: 12px; padding-top: 10px; }
+.advdetails summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.advdetails summary:hover { color: var(--ink); }
+.advdetails[open] summary { margin-bottom: 6px; }
+/* linked-Meshy-tasks expander: a one-line count collapsed, tidy rows when open */
+.linklist summary { cursor: pointer; color: var(--gold); }
+.linklist summary:hover { filter: brightness(1.2); }
+.linkrow { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.linkrow .linkdesc { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.linkrow button { padding: 3px 8px; font-size: 11px; }
+.uploader { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.uploader label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; }
+.meshyprog { font-size: 11px; color: var(--gold); margin-top: 6px; min-height: 14px; }
+.anglerow { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
+.anglerow input { width: 56px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); padding: 4px; border-radius: 4px; }
+.hidden { display: none; }
+
+/* split Drop button + quality menu */
+.splitbtn { position: relative; display: inline-flex; }
+.splitbtn > #dropBtn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.splitbtn > .split-caret {
+  border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 0;
+  padding: 7px 8px; font-size: 11px;
+}
+.dropmenu {
+  position: absolute; top: calc(100% + 3px); right: 0; z-index: 30;
+  background: var(--panel2); border: 1px solid var(--gold); border-radius: 6px;
+  padding: 4px; min-width: 150px; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; gap: 2px;
+}
+/* .dropmenu's display:flex is declared after the generic .hidden rule and has equal specificity,
+   so it would win and the menu could never hide -- this two-class selector is more specific. */
+.dropmenu.hidden { display: none; }
+.dropmenu button {
+  background: none; border: 0; border-radius: 4px; text-align: left;
+  padding: 6px 10px; color: var(--ink); font-size: 12px; cursor: pointer;
+}
+.dropmenu button:hover { background: var(--panel); color: var(--gold); }
+
+/* Detail-panel tabs (Item / Flippy / Equipped) */
+.tabbar { display: flex; gap: 2px; margin: 6px 0 0; border-bottom: 1px solid var(--line); }
+.tab { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+       padding: 7px 13px; color: var(--muted); cursor: pointer; font-size: 13px; }
+.tab:hover { color: var(--ink); border-color: transparent; }
+.tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.tab:disabled { opacity: .45; cursor: default; }
+.tabpanel { padding-top: 12px; }
+/* the first tool block in a tab shouldn't draw its own divider right under the tab bar */
+.tabpanel > .uploader:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+/* Equipped preview stage */
+.eqstage { min-height: 210px; display: flex; align-items: center; justify-content: center;
+           border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+.eqstage img { image-rendering: pixelated; height: 190px; width: auto; }
+#eqNote { margin-bottom: 8px; }
+.tabpanel .anglerow select { background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+                             border-radius: 4px; padding: 3px 5px; font-size: 12px; }
+.checker {
+  background-image:
+    linear-gradient(45deg, #2b2418 25%, transparent 25%),
+    linear-gradient(-45deg, #2b2418 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2b2418 75%),
+    linear-gradient(-45deg, transparent 75%, #2b2418 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+}
+.toast {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  background: #2a2318; border: 1px solid var(--gold); color: var(--ink);
+  padding: 10px 16px; border-radius: 6px; font-size: 13px; z-index: 20; max-width: 70vw;
+}
+.toast.err { border-color: #c96a4a; }
+
+/* framing panel */
+#framePanel { margin-top: 6px; }
+.framewrap { display: flex; gap: 12px; align-items: flex-start; }
+.framectrls { flex: 1; min-width: 180px; }
+.slrow { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 12px; }
+.slrow input[type=range] { flex: 1; }
+.slrow span { width: 34px; text-align: right; color: var(--gold); font-variant-numeric: tabular-nums; }
+
+/* ---- generation settings + provenance (transparency) ---- */
+.wf-genset { margin: 6px 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: #17140d; }
+.wf-setgrid { display: flex; flex-direction: column; gap: 6px; }
+.wf-setgrid textarea { width: 100%; resize: vertical; font: 12px/1.4 ui-monospace, monospace; }
+.wf-setnums { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 4px 0; }
+.wf-setnums .seedbox { width: 90px; }
+.wf-setprev { font: 11px/1.4 ui-monospace, monospace; color: var(--muted); padding: 6px; background:#12100b; border-radius: 4px; word-break: break-word; }
+.wf-prov { margin: 4px 0 2px; }
+
+/* Shared collapsible provenance box (provbox.js pvBox/pvRow) -- used here and by .altinspect. */
+.pvbox { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.pvbox summary { cursor: pointer; color: var(--gold); font-size: 12px; user-select: none;
+  display: flex; align-items: center; gap: 10px; }
+.pvbox summary::-webkit-details-marker { margin-top: 1px; }  /* nudge the arrow to align with flex row */
+.pvbox[open] summary { margin-bottom: 4px; }
+.pvbox-row { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px dotted #2c2517; font-size: 12px; }
+.pvbox-row:last-child { border-bottom: none; }
+.pvbox-k { flex: 0 0 96px; color: var(--muted); text-align: right; }
+.pvbox-v { flex: 1; color: var(--ink); word-break: break-word; font-family: ui-monospace, monospace; }

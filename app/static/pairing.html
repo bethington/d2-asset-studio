@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pair Meshy generations — PD2 Asset Studio</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .pairbar { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--line); position:sticky; top:49px; background:var(--bg); z-index:4; }
+  .pairbar .count { color:var(--muted); font-size:12px; }
+  .rows { padding:12px 16px 80px; display:flex; flex-direction:column; gap:12px; }
+
+  .prow { border:1px solid var(--line); border-radius:8px; background:var(--panel); overflow:hidden; }
+  .prow.done { opacity:.55; border-color:var(--accent); }
+  .prow > .head { display:flex; align-items:center; gap:10px; padding:6px 10px; background:var(--panel2); border-bottom:1px solid var(--line); }
+  .prow .tname { font-weight:600; color:var(--gold); }
+  .prow .tmeta { font-size:11px; color:var(--muted); }
+  .prow .rowact { margin-left:auto; display:flex; gap:6px; }
+
+  .body { display:flex; gap:14px; padding:10px; align-items:flex-start; }
+  .anchor { display:flex; gap:8px; flex:0 0 auto; padding-right:14px; border-right:1px dashed var(--line); }
+  .anchor figure { margin:0; text-align:center; }
+  .anchor img { width:150px; height:150px; object-fit:contain; border:1px solid var(--gold); border-radius:5px; image-rendering:pixelated; }
+  .anchor figcaption { font-size:10px; color:var(--muted); margin-top:3px; }
+
+  .cands { display:flex; gap:8px; flex-wrap:wrap; align-content:flex-start; }
+  .cand { position:relative; }
+  .cand input { position:absolute; top:6px; left:6px; margin:0; z-index:2; accent-color:var(--gold); cursor:pointer; }
+  .cand label { display:block; width:104px; border:1px solid var(--line); border-radius:5px; padding:4px; cursor:pointer; background:var(--panel2); }
+  .cand label:hover { border-color:var(--gold); }
+  .cand input:checked + label { border-color:var(--gold); box-shadow:0 0 0 1px var(--gold); background:#33291a; }
+  .cand.chosen label { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .cand .ph.rendering { outline:1px dashed var(--gold); outline-offset:-2px; }
+  .cand .pairthumb { image-rendering:auto; max-width:84px; max-height:84px; }
+  .cand label.static { cursor:default; }
+  .prow.unplaced { border-color:#6a4030; }
+  .prow.ignored { border-color:#3a3020; opacity:.75; }
+  .cand .xbtn { position:absolute; top:2px; right:2px; z-index:3; padding:0 5px; font-size:11px;
+                line-height:16px; background:#2a2318cc; border:1px solid var(--line);
+                border-radius:3px; color:var(--muted); cursor:pointer; }
+  .cand .xbtn:hover { color:#e0a07a; border-color:#6a4030; }
+  .tuneracts button.ghost { background:transparent; color:var(--muted);
+                            border:1px solid var(--line); }
+  .tuneracts button.ghost:disabled { opacity:.35; cursor:default; }
+  /* inside the card label, under the name — fills the label's content width */
+  .cand .tunebtn { display:block; width:100%; margin-top:3px; padding:2px; font-size:10px;
+                   background:var(--panel2); color:var(--muted);
+                   border:1px solid var(--line); border-radius:4px; cursor:pointer; }
+  .cand .tunebtn:hover { border-color:var(--gold); color:var(--ink); }
+  .cand .nonebtn { width:104px; margin-top:4px; padding:3px; font-size:11px;
+                   background:var(--panel2); color:var(--muted);
+                   border:1px solid var(--line); border-radius:4px; cursor:pointer; }
+  .cand .nonebtn:hover { border-color:var(--gold); color:var(--ink); }
+  .cand.none label { line-height:1.35; }
+  .cand .assign { width:104px; margin-top:4px; background:var(--panel2); color:var(--ink);
+                  border:1px solid var(--line); padding:4px 6px; border-radius:4px; font-size:11px; }
+  .hit { display:flex; align-items:center; gap:5px; padding:3px; cursor:pointer; border-radius:3px; }
+  .hit:hover { background:#33291a; }
+  .hit img { width:26px; height:26px; object-fit:contain; image-rendering:pixelated; }
+  .hit span { font-size:10px; color:var(--muted); }
+  .hits { max-width:150px; }
+  .cand .ph { height:88px; display:flex; align-items:center; justify-content:center; border-radius:3px; }
+  .cand .ph img { max-width:84px; max-height:84px; image-rendering:pixelated; }
+  .cand .nm { font-size:11px; text-align:center; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cand .why { font-size:10px; color:var(--muted); text-align:center; }
+  .cand .also { font-size:9px; color:#8a7a5a; text-align:center; margin-top:2px;
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cand.best .why { color:var(--accent); }
+  .cand.none label { display:flex; align-items:center; justify-content:center; height:100%; min-height:120px; color:var(--muted); font-size:12px; }
+
+  .prow.needsconfirm { border-color:#c96a4a; }
+  .warn { font-size:11px; color:#e0a07a; background:#3a2418; border:1px solid #6a4030;
+          padding:2px 7px; border-radius:10px; }
+  .searchcell { width:190px; }
+  .searchcell input { width:100%; background:var(--panel2); color:var(--ink);
+                      border:1px solid var(--line); padding:6px 8px; border-radius:5px; font-size:12px; }
+  .searchcell input:focus { border-color:var(--gold); outline:none; }
+  .hits { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .hits .cand label { width:88px; }
+  .hits .cand .ph { height:64px; }
+  .hits .cand .ph img { max-width:60px; max-height:60px; }
+
+  /* All-variants strip: every re-imagined variant as a slot, generated or not */
+  .variants { border-top:1px solid var(--line); padding:8px 10px; }
+  .vhead { font-size:11px; color:var(--muted); margin-bottom:6px; }
+  .vgrid { display:flex; gap:8px; flex-wrap:wrap; }
+  .vslot { width:76px; display:flex; flex-direction:column; align-items:center; gap:3px;
+           border:1px solid var(--line); border-radius:5px; padding:4px; background:var(--panel2); }
+  .vslot.todo { border-style:dashed; opacity:.9; }
+  .vslot.done { border-color:var(--gold); }
+  .vthumb { position:relative; width:66px; height:66px; display:flex; align-items:center;
+            justify-content:center; border-radius:3px; }
+  .vthumb img { max-width:62px; max-height:62px; image-rendering:pixelated; }
+  .vslot.todo .vthumb img { opacity:.55; }
+  .vbadge { position:absolute; top:2px; right:2px; font-size:9px; color:#0c0c0c;
+            background:var(--gold); border-radius:8px; padding:0 4px; font-weight:600; }
+  .vlabel { font-size:10px; color:var(--ink); white-space:nowrap; }
+  .vgen { width:100%; font-size:10px; padding:2px; background:var(--panel);
+          border:1px solid var(--line); border-radius:4px; color:var(--muted); cursor:pointer; }
+  .vgen:hover { border-color:var(--gold); color:var(--ink); }
+  .vgen:disabled { opacity:.6; cursor:default; }
+  button.gold { background:#4a3d1a; border-color:var(--gold); color:#f0dca8; }
+  button.gold:hover { background:#5a4a20; }
+  button.gold:disabled { opacity:.7; cursor:default; }
+
+  .tuner { position:fixed; inset:0; background:#000b; z-index:60; display:flex;
+           align-items:center; justify-content:center; }
+  .tunerbox { background:var(--panel); border:1px solid var(--gold); border-radius:8px;
+              padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+  .tunerbox h3 { margin:0; color:var(--gold); font-size:15px; }
+  .tunerstage { position:relative; align-self:center; line-height:0; }
+  /* The original sprite is no longer drawn behind the hands -- on dark gloves
+     (invmgl especially) it showed through and muddled them. The element is KEPT with
+     opacity 0 because the stage geometry is measured from its box; hiding it with
+     display:none would collapse that to zero. The backdrop is the app's standard
+     transparency checker (same as the item thumbnails), over a dark base so the
+     pattern stays subtle behind the artwork. */
+  .tunerstage { background-color:#1a1610; }
+  .tunerstage .ghost { opacity:0; image-rendering:pixelated; display:block; }
+  .tunerstage .hand { position:absolute; cursor:grab; user-select:none;
+                      transform-origin:center center; }
+  .tunerstage .hand.sel { outline:1px dashed var(--gold); outline-offset:2px; }
+  .tunerwrap { align-self:center; padding:52px; position:relative; overflow:hidden;
+               border-radius:6px; background:#15110c; }
+  .tunerstage .bounds { position:absolute; inset:0; pointer-events:none; z-index:5;
+                        border:2px solid var(--gold); box-shadow:0 0 0 320px rgba(8,6,4,.74); }
+  .tunerstage .cellgrid { position:absolute; inset:0;
+    background-image:linear-gradient(to right, rgba(201,164,74,.28) 1px, transparent 1px),
+                     linear-gradient(to bottom, rgba(201,164,74,.28) 1px, transparent 1px); }
+  .boundsinfo { display:flex; gap:14px; align-items:center; font-size:11px; color:var(--muted); }
+  .clipstat.ok { color:var(--accent); }
+  .clipstat.warn { color:var(--gold); }
+  .clipstat.bad { color:#e0705a; font-weight:600; }
+  /* live 3D preview replaces the flat hands when the generation has a model */
+  /* the raw render feeds the sprite projection; only the projection is shown, so what
+     you pose against is the build's actual output */
+  .stage3d { display:none; }
+  .spriteview { position:relative; display:inline-block; }
+  .stageout { display:block; background:#000; border:1px solid var(--gold);
+              border-radius:2px; image-rendering:auto; }
+  .spritepx { position:absolute; right:6px; bottom:6px; text-align:center;
+              background:rgba(0,0,0,.75); border:1px solid var(--line);
+              border-radius:3px; padding:3px 4px 2px; }
+  .spritepx canvas { display:block; background:#000; image-rendering:pixelated;
+                     outline:1px solid var(--line); }
+  .spritepx span { display:block; font-size:8px; color:var(--muted); margin-top:2px; }
+  .tunerbox .ctlrow input[type=range] { width:190px; }
+  .engineask { position:fixed; inset:0; background:#000c; z-index:70; display:flex;
+               align-items:center; justify-content:center; }
+  .engineask .box { background:var(--panel); border:1px solid var(--gold); border-radius:8px;
+                    padding:16px 18px; max-width:460px; display:flex; flex-direction:column; gap:10px; }
+  .engineask h4 { margin:0; color:var(--gold); font-size:14px; }
+  .engineask .opt { display:flex; gap:10px; align-items:flex-start; padding:8px;
+                    border:1px solid var(--line); border-radius:6px; cursor:pointer; }
+  .engineask .opt:hover { border-color:var(--gold); }
+  .engineask .opt.disabled { opacity:.45; cursor:not-allowed; }
+  .engineask .opt b { color:var(--ink); }
+  .engineask .opt span { font-size:11px; color:var(--muted); }
+  .tunerhelp { font-size:11px; color:var(--muted); }
+  .ctlrow { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted);
+            padding:3px 6px; border:1px solid transparent; border-radius:4px; }
+  .ctlrow.sel { border-color:var(--line); background:#2a231855; }
+  .ctlrow .ctlname { width:44px; color:var(--gold); font-weight:600; }
+  .ctlrow label { display:flex; align-items:center; gap:5px; }
+  .ctlrow input[type=range] { width:130px; accent-color:var(--gold); }
+  .ctlrow output { width:46px; text-align:right; color:var(--ink); }
+  .ctlrow output.offout { width:120px; text-align:left; }
+  .ctlrow button { padding:2px 7px; font-size:10px; }
+  .tuneracts { display:flex; align-items:center; gap:8px; }
+  .tuneracts .count { margin-left:auto; margin-right:8px; }
+
+  .stickyfoot { position:fixed; bottom:0; left:0; right:0; display:flex; align-items:center; gap:12px;
+                padding:10px 16px; background:linear-gradient(#1a150e,#241d13); border-top:1px solid var(--line); z-index:6; }
+  .empty { padding:40px 16px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pair Meshy generations</h1>
+  <div class="game" id="scanState">scanning…</div>
+  <div class="actions">
+    <a href="/"><button>← Gallery</button></a>
+    <button id="acceptAllBtn" class="gold" title="Build + activate every row's chosen (highlighted) generation as its DC6 — gloves as pairs, everything else as a single model (Blender)">✓ Accept all</button>
+    <button id="texBtn" title="Point each generation at its textured model (fixes grey/untextured previews)">✨ Resolve textures</button>
+    <button id="rescanBtn" title="Re-scan your Meshy workspace">↻ Rescan</button>
+  </div>
+</header>
+
+<div class="pairbar">
+  <span class="count" id="counts"></span>
+</div>
+
+<div class="rows" id="rows"><div class="empty">Scanning your Meshy workspace…</div></div>
+
+<div class="stickyfoot">
+  <span class="count">Left = the original PD2 artwork from the DC6. Right = your Meshy generations matched to it
+  (matched exactly via your re-imagined art library, by filename). Pick which generation each art file should use.</span>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module" src="/static/pairing.js"></script>
+</body>
+</html>

@@ -1,0 +1,846 @@
+{
+ "last_node_id": 17,
+ "last_link_id": 21,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "UnetLoaderGGUF",
+   "pos": [
+    40,
+    40
+   ],
+   "size": [
+    340,
+    60
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      1
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "UnetLoaderGGUF"
+   },
+   "widgets_values": [
+    "Qwen-Image-Edit-2509-Q6_K.gguf"
+   ]
+  },
+  {
+   "id": 2,
+   "type": "LoraLoaderModelOnly",
+   "pos": [
+    420,
+    40
+   ],
+   "size": [
+    340,
+    82
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 1
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      2
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoraLoaderModelOnly"
+   },
+   "widgets_values": [
+    "Qwen-Image-Edit-2509-Lightning-4steps-bf16.safetensors",
+    1.0
+   ]
+  },
+  {
+   "id": 3,
+   "type": "ModelSamplingAuraFlow",
+   "pos": [
+    800,
+    40
+   ],
+   "size": [
+    280,
+    58
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 2
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      3
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ModelSamplingAuraFlow"
+   },
+   "widgets_values": [
+    3.0
+   ]
+  },
+  {
+   "id": 4,
+   "type": "CFGNorm",
+   "pos": [
+    1120,
+    40
+   ],
+   "size": [
+    240,
+    58
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 3
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      4
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CFGNorm"
+   },
+   "widgets_values": [
+    1.0
+   ]
+  },
+  {
+   "id": 5,
+   "type": "CLIPLoader",
+   "pos": [
+    40,
+    160
+   ],
+   "size": [
+    340,
+    82
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      5,
+      6
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPLoader"
+   },
+   "widgets_values": [
+    "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    "qwen_image",
+    "default"
+   ]
+  },
+  {
+   "id": 6,
+   "type": "VAELoader",
+   "pos": [
+    40,
+    290
+   ],
+   "size": [
+    340,
+    58
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      7,
+      8,
+      9,
+      10
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "qwen_image_vae.safetensors"
+   ]
+  },
+  {
+   "id": 7,
+   "type": "LoadImage",
+   "pos": [
+    40,
+    400
+   ],
+   "size": [
+    340,
+    314
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      11
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": null,
+     "slot_index": 1
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "sprite_matted_gray.png",
+    "image"
+   ]
+  },
+  {
+   "id": 8,
+   "type": "UpscaleModelLoader",
+   "pos": [
+    40,
+    760
+   ],
+   "size": [
+    340,
+    58
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "UPSCALE_MODEL",
+     "type": "UPSCALE_MODEL",
+     "links": [
+      12
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "UpscaleModelLoader"
+   },
+   "widgets_values": [
+    "4x-UltraSharp.pth"
+   ]
+  },
+  {
+   "id": 9,
+   "type": "ImageUpscaleWithModel",
+   "pos": [
+    420,
+    620
+   ],
+   "size": [
+    280,
+    78
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "upscale_model",
+     "type": "UPSCALE_MODEL",
+     "link": 12
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 11
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      13
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ImageUpscaleWithModel"
+   },
+   "widgets_values": [],
+   "title": "GAN pre-upscale (4x-UltraSharp)"
+  },
+  {
+   "id": 10,
+   "type": "ImageScale",
+   "pos": [
+    740,
+    620
+   ],
+   "size": [
+    300,
+    130
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 13
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      14,
+      15,
+      16
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ImageScale"
+   },
+   "widgets_values": [
+    "lanczos",
+    1024,
+    1024,
+    "disabled"
+   ]
+  },
+  {
+   "id": 11,
+   "type": "TextEncodeQwenImageEditPlus",
+   "pos": [
+    1080,
+    380
+   ],
+   "size": [
+    420,
+    200
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 5
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 7
+    },
+    {
+     "name": "image1",
+     "type": "IMAGE",
+     "link": 14
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      17
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "TextEncodeQwenImageEditPlus"
+   },
+   "widgets_values": [
+    "the item is <IDENTITY \u2014 one literal sentence describing the ORIGINAL sprite>. hand-painted dark-fantasy RPG inventory icon, vivid saturated colours, glossy translucent faceted crystal, bright specular highlights, preserve the inner glow and sparkle, crisp sharp edges, keep the exact shape, silhouette, materials and colours of the original"
+   ],
+   "title": "POSITIVE instruction"
+  },
+  {
+   "id": 12,
+   "type": "TextEncodeQwenImageEditPlus",
+   "pos": [
+    1080,
+    630
+   ],
+   "size": [
+    420,
+    160
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 6
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 8
+    },
+    {
+     "name": "image1",
+     "type": "IMAGE",
+     "link": 15
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      18
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "TextEncodeQwenImageEditPlus"
+   },
+   "widgets_values": [
+    "treasure chest, box, container, letter, text, logo, face, creature, blurry, low quality, watermark, frame, border"
+   ],
+   "title": "NEGATIVE"
+  },
+  {
+   "id": 13,
+   "type": "VAEEncode",
+   "pos": [
+    1080,
+    840
+   ],
+   "size": [
+    240,
+    78
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "pixels",
+     "type": "IMAGE",
+     "link": 16
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 9
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      19
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEEncode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 14,
+   "type": "KSampler",
+   "pos": [
+    1560,
+    380
+   ],
+   "size": [
+    320,
+    262
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 4
+    },
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 17
+    },
+    {
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 18
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 19
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      20
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    7,
+    "fixed",
+    4,
+    1.0,
+    "euler",
+    "simple",
+    1.0
+   ]
+  },
+  {
+   "id": 15,
+   "type": "VAEDecode",
+   "pos": [
+    1920,
+    380
+   ],
+   "size": [
+    220,
+    78
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 20
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 10
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      21
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 16,
+   "type": "SaveImage",
+   "pos": [
+    2180,
+    380
+   ],
+   "size": [
+    320,
+    290
+   ],
+   "flags": {},
+   "order": 16,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 21
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "d2qwen"
+   ]
+  },
+  {
+   "id": 17,
+   "type": "Note",
+   "pos": [
+    1560,
+    720
+   ],
+   "size": [
+    560,
+    260
+   ],
+   "flags": {},
+   "order": 17,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "m4 \u2014 m2 + Oklab color transfer (Python post-pass)\n\nPython-side steps around this graph (app/comfy.py + scripts/fidelity_lab.py):\n1. INPUT: the sprite is bbox-cropped and matted onto neutral gray at near-native size\n   so the GAN (not LANCZOS) does the enlargement (matte_and_size + _native_long_side).\n2. OUTPUT: background re-cut with BiRefNet/rembg clamped to the original alpha\n   (recut_alpha_rembg), then fit to the item's cell grid, palette-quantized (Oklab\n   nearest, indices 1-224), edge-outlined, and DC6-encoded (assets.png_to_item_dc6).\nm4 = the m2 graph result + color transfer (see m3 note).\n"
+   ],
+   "color": "#432",
+   "bgcolor": "#653"
+  }
+ ],
+ "links": [
+  [
+   1,
+   1,
+   0,
+   2,
+   0,
+   "MODEL"
+  ],
+  [
+   2,
+   2,
+   0,
+   3,
+   0,
+   "MODEL"
+  ],
+  [
+   3,
+   3,
+   0,
+   4,
+   0,
+   "MODEL"
+  ],
+  [
+   4,
+   4,
+   0,
+   14,
+   0,
+   "MODEL"
+  ],
+  [
+   5,
+   5,
+   0,
+   11,
+   0,
+   "CLIP"
+  ],
+  [
+   6,
+   5,
+   0,
+   12,
+   0,
+   "CLIP"
+  ],
+  [
+   7,
+   6,
+   0,
+   11,
+   1,
+   "VAE"
+  ],
+  [
+   8,
+   6,
+   0,
+   12,
+   1,
+   "VAE"
+  ],
+  [
+   9,
+   6,
+   0,
+   13,
+   1,
+   "VAE"
+  ],
+  [
+   10,
+   6,
+   0,
+   15,
+   1,
+   "VAE"
+  ],
+  [
+   11,
+   7,
+   0,
+   9,
+   1,
+   "IMAGE"
+  ],
+  [
+   12,
+   8,
+   0,
+   9,
+   0,
+   "UPSCALE_MODEL"
+  ],
+  [
+   13,
+   9,
+   0,
+   10,
+   0,
+   "IMAGE"
+  ],
+  [
+   14,
+   10,
+   0,
+   11,
+   2,
+   "IMAGE"
+  ],
+  [
+   15,
+   10,
+   0,
+   12,
+   2,
+   "IMAGE"
+  ],
+  [
+   16,
+   10,
+   0,
+   13,
+   0,
+   "IMAGE"
+  ],
+  [
+   17,
+   11,
+   0,
+   14,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   18,
+   12,
+   0,
+   14,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   19,
+   13,
+   0,
+   14,
+   3,
+   "LATENT"
+  ],
+  [
+   20,
+   14,
+   0,
+   15,
+   0,
+   "LATENT"
+  ],
+  [
+   21,
+   15,
+   0,
+   16,
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "note": "m4 \u2014 m2 + Oklab color transfer (Python post-pass)"
+ },
+ "version": 0.4
+}
