@@ -1733,3 +1733,28 @@ Phase 1 (Item Art Studio) is **complete beyond its original scope** (DoD met §1
 Generate/Enhance front end). Phase 2 (units/characters) has **started early via the equipped
 pipeline** — driven by item-on-character needs rather than monster sheets; monster/NPC art remains
 future. Phases 3–5 unchanged.
+
+### 25.7 Staying in sync with game updates (2026-09-26)
+Studio stores no copy of the game's item data: the catalog, originals and tables are read from the
+MPQs. The gaps were freshness and stored art/edits, closed as follows (code in `pyd2/mpq.py`,
+`app/game_sync.py`, `app/excel.py`; tests `test_mpq_discovery`, `test_game_sync`, `test_bin_rebuild`):
+- **Discovery + refresh.** The archive order is derived from `PD2_GAME` (not fixed paths). Any
+  size/mtime change to an archive closes the cached handles, bumps `mpq.generation()` and clears the
+  derived caches (`mpq.on_change`), so an update is picked up without a restart. An unrecognised
+  `pd2*`/`patch*` archive is logged and shown in the banner, never read on a guess; list it in
+  `PD2_EXTRA_MPQS` (highest priority first). `pd2monchars.mpq` is such an archive on the author's
+  install; every path probed in it was a protected phantom entry, so its contents are unknown.
+- **Drift.** Each ACTIVE alternate is fingerprinted (sha1 of the game's original DC6 + the cell
+  size of the items using it) in `<workspace>/sync_baseline.json`, baselined "as of now" the first
+  time it is seen. If the game's original or the cell size later differs, the alternate is flagged
+  and left OUT of the pushed patch (never deleted); `POST /api/sync/accept` ("Keep my art" in the
+  banner) adopts the new state. Orphaned alternate buckets, Enhance stores and prompts are reported,
+  never migrated. An unreadable original (archive mid-update) is "unverified", not drift.
+- **Table edits are diffs.** `txt_edits` (row name, field, value) is the source of truth; the overlay
+  `uniqueitems/setitems.bin` is re-derived from the CURRENT stock bin at push time, at startup and on
+  a detected update. A vanished row is reported and its edit kept; a changed record layout falls
+  back to the game's own table rather than shipping a wrong-format copy.
+- **Test isolation.** `studio_config.WORKSPACE` resolves on first read: importing `pyd2.mpq` used to
+  pin the real workspace before a test could point `ASSET_STUDIO_WS` at a throw-away one.
+- **Known gap.** VarInvGfx bases (rings/amulets/charms/jewels) are excluded from the
+  `uniqueinvfile`/`setinvfile` resolution (`app/catalog.py`) until checked in the live game.

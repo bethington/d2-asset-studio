@@ -23,11 +23,13 @@ from PIL import Image  # noqa: E402
 import app.assets as assets  # noqa: E402
 import app.blender as blender  # noqa: E402
 import app.excel as excel  # noqa: E402
+import app.game_sync as game_sync  # noqa: E402
 import app.glove_pairs as glove_pairs  # noqa: E402
 import app.meshy_links as meshy_links  # noqa: E402
 import app.meshy_web as meshy_web  # noqa: E402
 import app.pair_orient3d as pair_orient3d  # noqa: E402
 from app.catalog import build_catalog, unique_row  # noqa: E402
+from pyd2.mpq import refresh_if_changed  # noqa: E402
 
 MESHY_CACHE = os.path.join(assets.WORKSPACE, "meshy_cache")
 
@@ -53,6 +55,7 @@ _CATALOG = {"items": None, "by_id": {}}
 
 
 def catalog():
+	refresh_if_changed()   # a game update since the catalog was built? invalidates it (see below)
 	if _CATALOG["items"] is None:
 		items, _by_code = build_catalog()
 		# apply live uniqueitems.bin edits (own invfile/flippyfile) over the txt-derived view;
@@ -90,6 +93,15 @@ def catalog():
 def invalidate_catalog():
 	_CATALOG["items"] = None
 	_CATALOG["by_id"] = {}
+
+
+# A game update (any MPQ changing on disk) drops every cache derived from MPQ data, then re-runs
+# the drift check on active alternates (app/game_sync.py); /api/sync/* exposes the result.
+game_sync.install(items_fn=lambda: catalog()["items"],
+                  extra_clears=[invalidate_catalog, lambda: _EQUIPPED_GIF_CACHE.clear()],
+                  rebuild_fn=lambda: excel.rebuild_overlay_bins(),
+                  bin_report_fn=lambda: excel.edit_report(), rebuild_now=True)
+game_sync.register_routes(flask_app)
 
 
 def _shared_group():
@@ -631,7 +643,8 @@ def api_push():
 	if err:
 		return jsonify({"ok": False, "stage": "register", "built": count,
 		                "error": f"game not reachable on :8790 ({err})"}), 502
-	return jsonify({"ok": True, "built": count, "mpq": path, "register": res})
+	return jsonify({"ok": True, "built": count, "mpq": path, "register": res,
+	                "skipped_drifted": game_sync.last_skipped()})
 
 
 import subprocess

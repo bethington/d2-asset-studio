@@ -32,6 +32,12 @@ def _clean(s: str) -> str:
 _VARGFX_CACHE = None
 
 
+def clear_caches():
+	"""Drop what was derived from the MPQs (called when the game's files change)."""
+	global _VARGFX_CACHE
+	_VARGFX_CACHE = None
+
+
 def var_inv_gfx():
 	"""itemtype code -> [invfile, ...] for every type with VarInvGfx > 0.
 

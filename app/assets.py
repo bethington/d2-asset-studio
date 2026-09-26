@@ -814,6 +814,7 @@ def activate(item_id: str, invfile: str, choice: str):
 		owned.add(rel)
 		entry["active"] = choice
 		entry["invfile"] = invfile
+		_note_activation(key, invfile)
 	if entry:
 		m["assets"][key] = entry
 	else:
@@ -840,6 +841,7 @@ def activate_flippy(item_id: str, flippyfile: str, choice: str):
 		owned.add(rel)
 		entry["flippy_active"] = choice
 		entry["flippyfile"] = flippyfile
+		_note_activation(key, flippyfile)
 	if entry:
 		m["assets"][key] = entry
 	else:
@@ -912,6 +914,33 @@ def rename_alternate(item_id: str, old_id: str, new_id: str, *, flippy: bool = F
 EXPORT_DIR = os.path.join(WORKSPACE, "export")
 
 
+def _note_activation(key: str, filename: str) -> None:
+	"""Baseline the game art an alternate is being activated against (app/game_sync.py)."""
+	try:
+		from app import game_sync
+		game_sync.note_activation(key, filename)
+	except Exception:  # noqa: BLE001 - drift tracking must never block an activation
+		pass
+
+
+def _rebuild_bins() -> dict:
+	"""Re-derive the overlay .bin edits (uniqueitems/setitems) from the CURRENT stock tables plus
+	the recorded edits (app/excel.py). Errors propagate: pushing a stale table would be worse than
+	failing the build."""
+	from app import excel
+	return excel.rebuild_overlay_bins()
+
+
+def _skip_drifted(files: dict) -> list:
+	"""Keep alternates made for art the game has since changed OUT of the patch (never deleted;
+	see app/game_sync.py). No-op until game_sync is installed."""
+	try:
+		from app import game_sync
+		return game_sync.filter_overlay(files)
+	except Exception:  # noqa: BLE001
+		return []
+
+
 def build_patch_mpq(out_path: str | None = None) -> tuple[str, int]:
 	"""Author a patch.mpq from every file in the overlay tree. Returns (path, count).
 
@@ -919,12 +948,14 @@ def build_patch_mpq(out_path: str | None = None) -> tuple[str, int]:
 	holds open never blocks the rebuild; the game closes the old one when it registers
 	the new. Stale, now-unlocked patch_*.mpq are pruned.
 	"""
+	_rebuild_bins()   # a frozen copy of an old game table must never ship: re-derive from today's
 	files = {}
 	for root, _dirs, names in os.walk(OVERLAY):
 		for n in names:
 			disk = os.path.join(root, n)
 			arc = os.path.relpath(disk, OVERLAY).replace("/", "\\")
 			files[arc] = disk
+	_skip_drifted(files)
 	os.makedirs(EXPORT_DIR, exist_ok=True)
 	if out_path is None:
 		# pick the next free patch_<n>.mpq

@@ -289,3 +289,115 @@ def tint_overrides(table: str) -> dict:
 		if t:
 			out[name] = t
 	return out
+
+
+# ---- re-deriving the overlay .bin after a game update --------------------------
+#
+# The manifest's `txt_edits` is the source of truth: (table, row name, field) -> value. The overlay
+# .bin is only a materialised copy of "stock bin + those edits". Left frozen it would shadow the
+# game's NEW table after an update, so it is re-derived from the CURRENT stock bin at push time, at
+# startup and whenever a game update is detected (app/game_sync.py).
+
+_TINT_KEY_OFF = {key: attr for attr, key in _TINT_SIDES.values()}   # 'invtransform' -> 'off_inv'
+
+
+def _plan_table(tbl: Table, edits: dict, stock: bytes):
+	"""Apply the recorded `edits` onto `stock`. Returns (data, applied, missing, invalid): rows
+	that took at least one edit, rows no longer in the table, and 'Row.field' entries whose value
+	fails the same validation a fresh write gets (e.g. a hand-edited manifest)."""
+	data = bytearray(stock)
+	applied, missing, invalid = [], [], []
+	for name, e in edits.items():
+		row = find_row(stock, name, tbl)
+		if row < 0:
+			missing.append(name)
+			continue
+		base = 4 + row * tbl.rec_size
+		took = False
+		for key, value in e.items():
+			try:
+				if tbl is UNIQUE_TABLE and key in FIELDS:
+					if not _VALID_VALUE.match(value or ""):
+						raise ValueError(key)
+					off = base + FIELDS[key]
+					data[off:off + STR_LEN] = value.encode("latin-1").ljust(STR_LEN, b"\x00")
+				elif key in _TINT_KEY_OFF:
+					data[base + getattr(tbl, _TINT_KEY_OFF[key])] = _encode_tint(value)
+				else:
+					raise ValueError(key)
+			except ValueError:
+				invalid.append(f"{name}.{key}")
+				continue
+			took = True
+		if took:
+			applied.append(name)
+	return data, applied, missing, invalid
+
+
+def _drop_overlay(tbl: Table, owned: set) -> None:
+	p = _overlay_bin_path(tbl)
+	if os.path.exists(p):
+		os.remove(p)
+	owned.discard(tbl.bin_rel)
+
+
+def rebuild_overlay_bins() -> dict:
+	"""Regenerate every overlay .bin from the CURRENT stock bin + the manifest's edit record.
+
+	Per table with edits (or an owned overlay copy): {applied, missing, invalid, schema_drift}.
+	Rows that vanished from the game's table are reported in `missing` and their edits kept in the
+	manifest (never written). If the table's record layout changed, the overlay copy is removed so
+	the game's own table is used -- a wrong-format copy would corrupt the game's data. An overlay
+	file that is not in `owned_overlay_files` is never touched.
+	"""
+	m = _load_manifest()
+	owned = set(m.get("owned_overlay_files", []))
+	report = {}
+	for tbl in TABLES.values():
+		edits = m.get("txt_edits", {}).get(tbl.name, {})
+		if not edits and tbl.bin_rel not in owned:
+			continue
+		rep = report[tbl.name] = {"applied": [], "missing": [], "invalid": [], "schema_drift": False}
+		stock = stock_bin(tbl)
+		try:
+			_check(stock, tbl)
+		except ValueError:
+			rep["schema_drift"] = True
+			_drop_overlay(tbl, owned)
+			continue
+		data, rep["applied"], rep["missing"], rep["invalid"] = _plan_table(tbl, edits, stock)
+		if bytes(data) == stock:
+			_drop_overlay(tbl, owned)      # nothing left to change (or the game adopted our values)
+			continue
+		p = _overlay_bin_path(tbl)
+		os.makedirs(os.path.dirname(p), exist_ok=True)
+		tmp = p + ".tmp"
+		with open(tmp, "wb") as f:
+			f.write(data)
+		os.replace(tmp, p)  # atomic -- the game may read mid-frame
+		owned.add(tbl.bin_rel)
+	if sorted(owned) != m.get("owned_overlay_files", []):
+		m["owned_overlay_files"] = sorted(owned)
+		_save_manifest(m)
+	return report
+
+
+def edit_report() -> dict:
+	"""Read-only: recorded edits that can NOT be applied to the current stock tables, as
+	{table: {missing, invalid, schema_drift}} (only tables with a problem appear)."""
+	m = _load_manifest()
+	out = {}
+	for tbl in TABLES.values():
+		edits = m.get("txt_edits", {}).get(tbl.name, {})
+		if not edits:
+			continue
+		stock = stock_bin(tbl)
+		try:
+			_check(stock, tbl)
+		except ValueError:
+			out[tbl.name] = {"missing": [], "invalid": [], "schema_drift": True}
+			continue
+		_data, _applied, missing, invalid = _plan_table(tbl, edits, stock)
+		if missing or invalid:
+			out[tbl.name] = {"missing": missing, "invalid": invalid, "schema_drift": False}
+	return out
