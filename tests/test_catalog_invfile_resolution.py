@@ -36,7 +36,8 @@ FAKE = {
 	],
 	"weapons": [],
 	# amulet: VarInvGfx type -> art comes from the TYPE's graphic list; base carries a uniqueinvfile
-	"misc": [_base("Amulet of the Viper", "vip", "invvip0", "invvip", "", typ="amul")],
+	"misc": [_base("Amulet of the Viper", "vip", "invvip0", "invvip", "", typ="amul"),
+	         _base("Amulet", "amu", "invamu", "", "", typ="amul")],   # no unique art of its own
 	"itemtypes": [{"Code": "amul", "VarInvGfx": "2", "InvGfx1": "invamu1", "InvGfx2": "invamu2"}],
 	"uniqueitems": [
 		{"index": "Biggin", "code": "cap", "invfile": "", "invtransform": ""},
@@ -44,6 +45,7 @@ FAKE = {
 		{"index": "Peasant", "code": "xap", "invfile": "", "invtransform": ""},
 		{"index": "Odd Unique", "code": "odd", "invfile": "", "invtransform": ""},
 		{"index": "Viper", "code": "vip", "invfile": "", "invtransform": ""},
+		{"index": "Plain Amulet", "code": "amu", "invfile": "", "invtransform": ""},
 	],
 	"setitems": [
 		{"index": "Infernal", "item": "cap", "invfile": "", "invtransform": ""},
@@ -91,10 +93,17 @@ def test_unique_and_set_fall_back_independently(fake_tables):
 	assert inv["set/Odd Set"] == "invodd"       # setinvfile blank -> base invfile, not uniqueinvfile
 
 
-def test_var_inv_gfx_bases_are_left_alone(fake_tables):
-	"""VarInvGfx types (rings/amulets/charms/jewels) draw from the type's graphic list; how that
-	interacts with uniqueinvfile is not verified in-game, so their unique/set art is unchanged."""
-	assert _inv(catalog.build_catalog()[0])["unique/Viper"] == "invamu1"
+def test_var_inv_gfx_base_with_its_own_unique_art_uses_it(fake_tables):
+	"""Verified in the live game 2026-09-26: Amulet of the Viper (an amul-type base whose row has
+	uniqueinvfile=invvip) draws invvip, NOT one of the amulet type's invamu1..3."""
+	assert _inv(catalog.build_catalog()[0])["unique/Viper"] == "invvip"
+
+
+def test_var_inv_gfx_base_without_unique_art_uses_the_type_list(fake_tables):
+	"""Uniques on VarInvGfx bases with blank unique art (Nagelring, Mara's Kaleidoscope, ...) draw a
+	sprite from the type's list -- the game picks per instance (two Nagelrings drew invrin4 and
+	invrin5), so the catalog can only show the first graphic."""
+	assert _inv(catalog.build_catalog()[0])["unique/Plain Amulet"] == "invamu1"
 
 
 def test_base_items_keep_their_own_invfile(fake_tables):
@@ -114,3 +123,5 @@ def test_live_pd2_data_matches_what_the_game_draws():
 	assert inv["set/McAuley's Paragon"] == "invcapu"   # shown in-game as "Sander's Paragon"
 	assert inv["unique/Harlequin Crest"] == "invcap"
 	assert inv["set/Cow King's Horns"] == "invcap"
+	assert inv["unique/Amulet of the Viper"] == "invvip"    # live game: draws invvip, not invamu1..3
+	assert inv["unique/Nagelring"] == "invrin1"             # type list (random per instance in-game)

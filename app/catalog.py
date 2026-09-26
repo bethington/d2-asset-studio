@@ -187,9 +187,11 @@ def build_catalog():
 				item["row_invfile"] = invfile      # keep what the txt claimed, for reference
 				item["invfile"] = vgfx[0]
 				item["var_invfiles"] = list(vgfx)
-				# How uniqueinvfile/setinvfile interact with the type's graphic list is unverified
-				# in-game, so uniques/sets of these types keep resolving through `invfile` as before.
-				item["unique_invfile"] = item["set_invfile"] = ""
+				# A NON-blank uniqueinvfile/setinvfile still beats the type's list (kept from the row
+				# above); a blank one falls through to it. Verified live 2026-09-26: Amulet of the
+				# Viper (uniqueinvfile=invvip) draws invvip, while uniques with blank unique art
+				# (Nagelring, Mara's Kaleidoscope, Rainbow Facet) draw a per-instance pick from the
+				# type's list. Only the Viper has such a base today; sets on these bases are by symmetry.
 			items.append(item)
 			by_code.setdefault(code, item)
 			if vgfx:

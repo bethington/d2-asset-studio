@@ -1756,5 +1756,10 @@ MPQs. The gaps were freshness and stored art/edits, closed as follows (code in `
   back to the game's own table rather than shipping a wrong-format copy.
 - **Test isolation.** `studio_config.WORKSPACE` resolves on first read: importing `pyd2.mpq` used to
   pin the real workspace before a test could point `ASSET_STUDIO_WS` at a throw-away one.
-- **Known gap.** VarInvGfx bases (rings/amulets/charms/jewels) are excluded from the
-  `uniqueinvfile`/`setinvfile` resolution (`app/catalog.py`) until checked in the live game.
+- **VarInvGfx bases (rings/amulets/charms/jewels), verified live 2026-09-26.** A base's NON-blank
+  `uniqueinvfile` beats the type's graphic list (Amulet of the Viper draws `invvip`, not
+  `invamu1..3`); a blank one falls through to the list, and the game then picks per INSTANCE
+  (two Nagelrings drew `invrin4` and `invrin5`, a Rainbow Facet `invjw4`). So the gallery can only
+  show the list's first graphic for those 43 uniques/sets; the mismatch is expected, not a bug.
+  Method: spawn into the inventory, `POST :8790/capture/frame` for a clean frame, diff against the
+  previous frame to isolate the new sprite, then pixel-match candidate DC6s (RMSE 0.0 = exact).
