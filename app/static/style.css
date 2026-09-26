@@ -207,6 +207,40 @@ main { display: flex; align-items: flex-start; }
 .itembig .biglbl { font-size: 11px; color: var(--muted); margin-top: 6px; }
 .detail h2 { margin: 0 0 4px; font-size: 16px; color: var(--gold); }
 .detail .meta { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+/* Tint chip + picker popover (uniques/sets). The chip sits inline in the meta line; the popover
+   hangs under it, same look as .dropmenu / .addpanel. */
+.metarow { position: relative; }
+.tintchip {
+  font: inherit; font-size: 11px; line-height: 1.4; padding: 0 7px; border-radius: 9px; cursor: pointer;
+  background: #241d12; color: var(--gold); border: 1px solid #6a5a28;
+}
+.tintchip:hover { filter: brightness(1.25); }
+.tintchip.empty { color: var(--muted); border-style: dashed; border-color: var(--line); }
+.tintpop {
+  position: absolute; top: calc(100% - 8px); left: 0; right: 0; z-index: 30; padding: 10px;
+  background: var(--panel2); border: 1px solid var(--gold); border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.5); max-height: 70vh; overflow-y: auto;
+}
+.tintpop.hidden { display: none; }
+.tintpop .meta { margin-bottom: 6px; }
+.tp-head { font-size: 12px; color: var(--gold); margin-bottom: 6px; }
+.tp-head .meta { display: inline; margin-left: 6px; }
+.tp-label { font-size: 11px; color: var(--muted); margin: 6px 0 4px; }
+.tp-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.tp-sw {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px 2px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; color: var(--muted);
+}
+.tp-sw:hover { border-color: var(--gold); color: var(--ink); }
+.tp-sw.sel { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); color: var(--gold); }
+.tp-sw img { height: 40px; max-width: 100%; object-fit: contain; image-rendering: pixelated; }
+.tp-blank { height: 40px; }
+.tp-nm { font-size: 10px; line-height: 1.2; }
+.tp-split { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; cursor: pointer; }
+.tp-hint { font-size: 11px; color: #d8a468; margin: 6px 0; }
+.tp-hint button, .tp-actions button { margin-left: 6px; }
+.tp-actions { margin: 6px 0; }
+.tp-foot { margin: 6px 0 0; font-size: 11px; }
 .variants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .variant {
   border: 1px solid var(--line); border-radius: 6px; padding: 6px; text-align: center;

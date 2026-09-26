@@ -303,7 +303,7 @@ async function selectItem(it) {
   const variants = [
     `<div class="variant ${it.active === "original" ? "active" : ""}${previewCls("original")}" data-choice="original">
        ${actBox("original")}
-       <div class="thumb checker"><img src="/api/item/${encodeURIComponent(it.id)}/original.png"></div>
+       <div class="thumb checker"><img src="/api/item/${encodeURIComponent(it.id)}/original.png?b=${ART_BUST}"></div>
        <div class="lbl">original</div></div>`,
     ...it.alts.map((a) => `
       <div class="variant ${it.active === a ? "active" : ""}${previewCls(a)}" data-choice="${a}">
@@ -337,10 +337,18 @@ async function selectItem(it) {
       </div>
       <div class="meta" id="txtState"></div>
     </details>` : "";
+  // uniques + sets carry a tint (invtransform/chrtransform in their .bin row); the chip opens the picker
+  const tintable = it.category === "unique" || it.category === "set";
+  const tintChip = tintable
+    ? ` · <button class="tintchip${it.invtransform ? "" : " empty"}" id="tintChip" title="Edit this item's tint (inventory / on-body colour)">${it.invtransform ? "tint " + it.invtransform : "+ tint"}</button>`
+    : (it.invtransform ? " · tint " + it.invtransform : "");
   d.innerHTML = `
     <div class="colhead">2 · Details</div>
     <h2>${it.name}</h2>
-    <div class="meta">${it.category} · code <b>${it.code}</b> · ${it.invwidth}×${it.invheight} cells · ${it.invfile}.dc6${it.invtransform ? " · tint " + it.invtransform : ""}</div>
+    <div class="metarow">
+      <div class="meta">${it.category} · code <b>${it.code}</b> · ${it.invwidth}×${it.invheight} cells · ${it.invfile}.dc6${tintChip}</div>
+      ${tintable ? `<div class="tintpop hidden" id="tintPop"></div>` : ""}
+    </div>
     <div class="anglerow">
       <div class="splitbtn">
         <button id="dropBtn" title="${dropTitle(it)}">⤓ Drop ${dropNativeLabel(it)}</button>
@@ -515,6 +523,7 @@ async function selectItem(it) {
   $("#dropBtn").onclick = () => dropInGame(it);           // native quality
   wireDropMenu(it);
   if (it.category === "unique") wireTxtSection(it);
+  wireTint(it);
   wireMeshyLinks(it);
 }
 
@@ -930,6 +939,120 @@ async function setOwnInvfile(it, value) {
   } finally {
     if ($("#setInvfileBtn")) $("#setInvfileBtn").disabled = false;
   }
+}
+
+/* ---------- Tint picker (the `tint xxxx` chip) ----------
+   Edits the item's inventory (invtransform) and on-body (chrtransform) colour bytes in its
+   uniqueitems/setitems .bin row. One swatch grid drives both sides while they match; when they
+   differ (or "separate on-body colour" is ticked) each side gets its own grid. A side whose base
+   item can't render a tint (InvTrans / Transform = 0) is left out. */
+let TINT_OPEN_FOR = null;         // item id whose picker is open; survives selectItem re-renders
+const TINT_SPLIT = new Map();     // item id -> user's "separate on-body colour" choice
+
+document.addEventListener("click", (e) => {
+  // the popover stops its own clicks (it re-renders under the cursor), so anything reaching here is outside it
+  const pop = document.querySelector("#tintPop");
+  if (pop && !pop.classList.contains("hidden") && !e.target.closest("#tintChip")) closeTintPop();
+});
+
+function closeTintPop() {
+  TINT_OPEN_FOR = null;
+  $("#tintPop")?.classList.add("hidden");
+}
+
+function wireTint(it) {
+  const chip = $("#tintChip"), pop = $("#tintPop");
+  if (!chip || !pop) return;
+  pop.onclick = (e) => e.stopPropagation();
+  chip.onclick = (e) => { e.stopPropagation(); TINT_OPEN_FOR === it.id ? closeTintPop() : openTintPop(it); };
+  if (TINT_OPEN_FOR === it.id) openTintPop(it);
+}
+
+// Which swatch grids to show: [{label, cur, sides}] -- `sides` are the .bin fields a click writes.
+function tintGroups(t, split) {
+  if (t.can_inv && t.can_chr) {
+    return split
+      ? [{ label: "Inventory", cur: t.inv, sides: ["inv"] }, { label: "On body", cur: t.chr, sides: ["chr"] }]
+      : [{ label: "Inventory + on body", cur: t.inv, sides: ["inv", "chr"] }];
+  }
+  if (t.can_inv) return [{ label: "Inventory", cur: t.inv, sides: ["inv"] }];
+  if (t.can_chr) return [{ label: "On body", cur: t.chr, sides: ["chr"] }];
+  return [];
+}
+
+async function openTintPop(it) {
+  const pop = $("#tintPop");
+  TINT_OPEN_FOR = it.id;
+  pop.classList.remove("hidden");
+  pop.innerHTML = `<div class="meta">loading…</div>`;
+  let t;
+  try {
+    const j = await (await fetch(`/api/item/${encodeURIComponent(it.id)}/txt`)).json();
+    if (!j.ok) throw new Error(j.error || "no tint data");
+    t = j.tint;
+  } catch (e) {
+    pop.innerHTML = `<div class="meta">couldn't load tint: ${esc(String(e.message || e))}</div>`;
+    return;
+  }
+  if (TINT_OPEN_FOR !== it.id || !$("#tintPop")) return;   // closed / switched item while loading
+  renderTintPop(it, t);
+}
+
+function renderTintPop(it, t) {
+  const pop = $("#tintPop");
+  const both = t.can_inv && t.can_chr;
+  const split = both && (TINT_SPLIT.has(it.id) ? TINT_SPLIT.get(it.id) : !t.linked);
+  const groups = tintGroups(t, split);
+  const enc = encodeURIComponent(it.id);
+  const label = (c) => c || "none";
+  const swatch = (g, gi, code) => `
+    <button class="tp-sw${g.cur === code ? " sel" : ""}" data-g="${gi}" data-code="${code || "none"}" title="${label(code)}">
+      ${t.can_inv ? `<img loading="lazy" src="/api/item/${enc}/tint/${code || "none"}.png?b=${ART_BUST}" alt="" onerror="this.style.visibility='hidden'">` : `<span class="tp-blank"></span>`}
+      <span class="tp-nm">${label(code)}</span>
+    </button>`;
+  const grids = groups.map((g, gi) => `
+    <div class="tp-group"><div class="tp-label">${g.label}</div>
+      <div class="tp-grid">${["", ...t.colors].map((c) => swatch(g, gi, c)).join("")}</div>
+    </div>`).join("");
+  const linkedNote = both && !split && !t.linked
+    ? `<div class="meta">on-body is currently <b>${label(t.chr)}</b> — picking a colour sets both.</div>` : "";
+  const customArt = it.active && it.active !== "original" && t.can_inv && t.inv;
+  pop.innerHTML = `
+    <div class="tp-head">Tint <span class="meta">${t.edited
+      ? `edited · stock ${label(t.stock_inv)}${t.stock_inv === t.stock_chr ? "" : " / " + label(t.stock_chr) + " on body"}`
+      : "stock"}</span></div>
+    ${groups.length ? grids : `<div class="meta">This item's base has no colour transform (InvTrans and Transform are 0), so a tint can't show in-game.</div>`}
+    ${linkedNote}
+    ${both ? `<label class="tp-split"><input type="checkbox" id="tpSplit" ${split ? "checked" : ""}> separate on-body colour</label>` : ""}
+    ${customArt ? `<div class="tp-hint">Custom art is active — a tint recolours it by palette index and can look off.
+      <button id="tpClear">Clear tint</button></div>` : ""}
+    ${t.edited ? `<div class="tp-actions"><button id="tpReset">Reset to stock</button></div>` : ""}
+    <div class="meta tp-foot">Applies on Push + Full reload.</div>`;
+
+  pop.querySelectorAll(".tp-sw").forEach((b) => {
+    b.onclick = () => {
+      const g = groups[+b.dataset.g];
+      applyTint(it, Object.fromEntries(g.sides.map((s) => [s, b.dataset.code])));
+    };
+  });
+  $("#tpSplit")?.addEventListener("change", (e) => { TINT_SPLIT.set(it.id, e.target.checked); renderTintPop(it, t); });
+  $("#tpReset")?.addEventListener("click", () => applyTint(it, { inv: "stock", chr: "stock" }));
+  $("#tpClear")?.addEventListener("click", () =>
+    applyTint(it, both && !split ? { inv: "none", chr: "none" } : { inv: "none" }));
+}
+
+async function applyTint(it, sides) {
+  const r = await fetch(`/api/item/${encodeURIComponent(it.id)}/txt`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ field: "tint", ...sides }),
+  });
+  const j = await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }));
+  if (!j.ok) return toast("tint edit failed: " + (j.error || ""), true);
+  toast(`${it.name} tint updated — Push + Full reload to apply`);
+  ART_BUST = Date.now();       // gallery tiles + swatches re-fetch the recoloured art
+  await loadItems();
+  const fresh = ITEMS.find((x) => x.id === it.id);
+  if (fresh) selectItem(fresh);   // re-renders the header; the open picker re-opens via TINT_OPEN_FOR
 }
 
 async function activateFlippy(it, choice) {
