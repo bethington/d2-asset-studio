@@ -70,6 +70,12 @@ def catalog():
 					if o["flippyfile"] != it["flippyfile"]:
 						it["stock_flippyfile"] = it["flippyfile"]
 					it["flippyfile"] = o["flippyfile"]
+		# live tint edits (uniques + sets): 'none' = the studio cleared the tint (-1)
+		tints = {"unique": excel.tint_overrides("uniqueitems"), "set": excel.tint_overrides("setitems")}
+		for it in items:
+			t = tints.get(it["category"], {}).get(it["name"])
+			if t and "invtransform" in t:
+				it["invtransform"] = "" if t["invtransform"] == "none" else t["invtransform"]
 		_CATALOG["items"] = items
 		_CATALOG["by_id"] = {it["id"]: it for it in items}
 		# base code -> base item (first wins), for resolving a rune/gem's stack counterpart
@@ -221,6 +227,14 @@ def api_original_png(item_id):
 	return Response(png, mimetype="image/png")
 
 
+def _active_art_dc6(it):
+	"""The DC6 the item shows in-game right now: the selected alternate, else the original art."""
+	choice = assets.active_choice(it["id"])
+	if not choice or choice == "original":
+		return assets.read_original_dc6(it.get("stock_invfile") or it["invfile"])
+	return assets.alt_dc6_bytes(it["id"], choice)
+
+
 @flask_app.get("/api/item/<path:item_id>/current.png")
 def api_current_png(item_id):
 	"""The image the item will actually show in-game right now: the selected alternate
@@ -230,16 +244,35 @@ def api_current_png(item_id):
 	if not it:
 		return "no such item", 404
 	try:
-		choice = assets.active_choice(item_id)
-		pal = _inv_tint_palette(it)
-		if not choice or choice == "original":
-			png = assets.dc6_to_png_bytes(
-				assets.read_original_dc6(it.get("stock_invfile") or it["invfile"]), palette=pal)
-		else:
-			png = assets.dc6_to_png_bytes(assets.alt_dc6_bytes(item_id, choice), palette=pal)
+		png = assets.dc6_to_png_bytes(_active_art_dc6(it), palette=_inv_tint_palette(it))
 	except Exception as e:  # noqa: BLE001
 		return f"render error: {e}", 500
 	return Response(png, mimetype="image/png")
+
+
+@flask_app.get("/api/item/<path:item_id>/tint/<code>.png")
+def api_tint_preview(item_id, code):
+	"""The item's active art recoloured with colour `code` (or 'none' = untinted): one swatch of
+	the tint picker. Uses the same remap the game applies (base InvTrans + colour code)."""
+	from pyd2 import colortransform
+	it = _item(item_id)
+	if not it:
+		return "no such item", 404
+	if it["category"] not in ("unique", "set"):
+		return "only uniques and sets carry a tint", 400
+	code = code.lower()
+	pal = None
+	if code != "none":
+		if code not in colortransform.COLOR_INDEX:
+			return f"unknown colour code {code!r}", 400
+		pal = assets.item_transform_palette(it.get("inv_trans", 0), code)
+		if pal is None:
+			return "this item's base has no inventory colour transform (InvTrans 0)", 409
+	try:
+		png = assets.dc6_to_png_bytes(_active_art_dc6(it), palette=pal)
+	except Exception as e:  # noqa: BLE001
+		return f"render error: {e}", 500
+	return Response(png, mimetype="image/png", headers={"Cache-Control": "no-cache"})
 
 
 @flask_app.get("/api/item/<path:item_id>/alt/<alt_id>.png")
@@ -325,7 +358,9 @@ def api_item_equipped_gif(item_id):
 	item_only = request.args.get("body", "1") == "0"   # body=0 -> hide the character, show the item alone
 	# unique/set worn recolour (None for normal items); key by item id since uniques share a base code
 	colormap = chars.worn_colormap(code, it.get("category", ""), it.get("name", ""))
-	ckey = (item_id, cls, mode, direction, item_only, colormap is not None)
+	# the colormap itself is part of the key: a tint edit changes it without changing the item id
+	ckey = (item_id, cls, mode, direction, item_only,
+	        hash(tuple(colormap)) if colormap is not None else None)
 	gif = _EQUIPPED_GIF_CACHE.get(ckey)
 	if gif is None:
 		try:
@@ -423,19 +458,56 @@ def api_alt_rename(item_id, alt_id):
 
 # ---- uniqueitems.bin cell edits (the txt sliver, plan §7.3) -------------
 
+_TINT_TABLES = {"unique": "uniqueitems", "set": "setitems"}
+
+
+def _tint_state(it):
+	"""The item's current .bin tint (colour codes, '' = none) plus whether each side can render:
+	the inventory tint needs the base's InvTrans 1..8, the on-body tint its `Transform` 1..8."""
+	from pyd2 import chars, colortransform
+	t = excel.get_tint(_TINT_TABLES[it["category"]], it["name"])
+	if t is None:
+		return None
+	t["colors"] = list(colortransform.COLOR_CODES)   # colors.txt order, for the picker
+	t["can_inv"] = 1 <= int(it.get("inv_trans", 0) or 0) <= 8
+	t["can_chr"] = chars.base_transform((it.get("code") or "").strip()) > 0
+	return t
+
+
 @flask_app.get("/api/item/<path:item_id>/txt")
 def api_txt_get(item_id):
 	it = _item(item_id)
 	if not it:
 		return "no such item", 404
-	if it["category"] != "unique":
-		return jsonify({"ok": False, "error": "bin edits are supported for uniques only"}), 400
+	if it["category"] not in _TINT_TABLES:
+		return jsonify({"ok": False, "error": "bin edits are supported for uniques and sets only"}), 400
+	tint = _tint_state(it)
+	if tint is None:
+		return jsonify({"ok": False, "error": f"{it['name']!r} not found in {_TINT_TABLES[it['category']]}.bin"}), 404
+	if it["category"] == "set":
+		return jsonify({"ok": True, "tint": tint})
 	u = excel.get_unique(it["name"])
 	if not u:
 		return jsonify({"ok": False, "error": f"{it['name']!r} not found in uniqueitems.bin"}), 404
 	u.update({"ok": True, "effective_invfile": it["invfile"],
-	          "effective_flippyfile": it["flippyfile"]})
+	          "effective_flippyfile": it["flippyfile"], "tint": tint})
 	return jsonify(u)
+
+
+def _api_tint_set(it, body):
+	"""Set/clear/revert an item's inventory and/or on-body tint. Each of `inv` / `chr`: a colour
+	code, 'none' (no tint), 'stock' (revert), or absent (leave that side alone)."""
+	sides = {k: body.get(k) for k in ("inv", "chr")}
+	if any(v is not None and not isinstance(v, str) for v in sides.values()):
+		return jsonify({"ok": False, "error": "inv/chr must be a colour code, 'none' or 'stock'"}), 400
+	try:
+		excel.set_tint(_TINT_TABLES[it["category"]], it["name"], **sides)
+	except (ValueError, KeyError) as e:
+		return jsonify({"ok": False, "error": str(e)}), 400
+	invalidate_catalog()
+	return jsonify({"ok": True, "tint": _tint_state(it),
+	                "note": "push + Full reload for the change to reach the game "
+	                        "(data tables load at process start)"})
 
 
 @flask_app.post("/api/item/<path:item_id>/txt")
@@ -446,14 +518,18 @@ def api_txt_set(item_id):
 	coherent: an active alternate is re-written under the new filename, and if no art
 	exists at a brand-new filename yet the current effective art is seeded there so
 	the game never dangles on a missing DC6.
+
+	`field: "tint"` instead edits the inventory/on-body colour byte(s) — uniques and sets.
 	"""
 	it = _item(item_id)
 	if not it:
 		return "no such item", 404
-	if it["category"] != "unique":
-		return jsonify({"ok": False, "error": "bin edits are supported for uniques only"}), 400
 	body = request.json or {}
 	fld = body.get("field", "invfile")
+	if fld == "tint" and it["category"] in _TINT_TABLES:
+		return _api_tint_set(it, body)
+	if it["category"] != "unique":
+		return jsonify({"ok": False, "error": "bin edits are supported for uniques only"}), 400
 	value = (body.get("value") or "").strip()
 	old_file = it["invfile"] if fld == "invfile" else it["flippyfile"]
 	try:

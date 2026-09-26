@@ -24,6 +24,7 @@ import os
 from PIL import Image
 
 import app.assets as assets
+import app.excel as excel
 from pyd2 import cof, colortransform, dcc
 
 CLASS_TOKENS = {
@@ -84,29 +85,38 @@ def _txt_by_col(name: str, key_col: str) -> dict:
     return _TXT_CACHE[ck]
 
 
+def base_transform(code: str) -> int:
+    """A base item's `Transform` (armor/weapons.txt): the item-palette selector (1..8) the game
+    feeds to MixPalette for its WORN art, or 0 when the base has none (then no on-body tint shows)."""
+    base = _txt_by_code("armor").get(code) or _txt_by_code("weapons").get(code)
+    if not base:
+        return 0
+    try:
+        transform = int((base.get("Transform") or "0").strip() or "0")
+    except ValueError:
+        return 0
+    return transform if 0 < transform < 9 else 0
+
+
 def worn_colormap(code: str, category: str = "", name: str = "") -> list | None:
     """The 256-entry palette index remap D2 applies to an item's worn art, or None for no transform.
 
     Mirrors ITEMS_GetColor (D2Common Items.cpp): the colormap = D2CMP MixPalette(nTransform, nColor)
     where nTransform is the base item's `Transform` (armor/weapons.txt, 1..8) and nColor is the
-    unique's/set's `chrtransform` colour code (colors.txt row, 0..20). Normal/magic/rare items get no
-    worn recolour here (magic-affix colours need affix RE; uniques & sets are the visible cases)."""
-    base = _txt_by_code("armor").get(code) or _txt_by_code("weapons").get(code)
-    if not base:
-        return None
-    try:
-        transform = int((base.get("Transform") or "0").strip() or "0")
-    except ValueError:
-        transform = 0
-    if not (0 < transform < 9):
+    unique's/set's `chrtransform` colour code (colors.txt row, 0..20) — the txt value unless the
+    studio has a live .bin tint edit for the item. Normal/magic/rare items get no worn recolour
+    here (magic-affix colours need affix RE; uniques & sets are the visible cases)."""
+    transform = base_transform(code)
+    if not transform:
         return None
     ct = ""
-    if category == "unique" and name:
-        row = _txt_by_col("uniqueitems", "index").get(name)
+    table = {"unique": "uniqueitems", "set": "setitems"}.get(category)
+    if table and name:
+        row = _txt_by_col(table, "index").get(name)
         ct = (row.get("chrtransform") or "").strip().lower() if row else ""
-    elif category == "set" and name:
-        row = _txt_by_col("setitems", "index").get(name)
-        ct = (row.get("chrtransform") or "").strip().lower() if row else ""
+        edited = excel.tint_overrides(table).get(name, {}).get("chrtransform")
+        if edited is not None:   # 'none' = the studio cleared it (-1)
+            ct = "" if edited == "none" else edited
     color = colortransform.COLOR_INDEX.get(ct)
     if color is None:
         return None
