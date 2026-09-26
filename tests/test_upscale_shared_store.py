@@ -62,7 +62,7 @@ def _setup():
 	                                      "color": 0.9, "ssim": 0.9}
 	comfy.to_canonical_2x = lambda m, size: m
 	gen_prompts.update = lambda *a, **k: {}
-	server._original_png_for = lambda it: _png((0, 0, 255, 255))
+	server._original_png_for = lambda it, **k: _png((0, 0, 255, 255))
 	return server.flask_app.test_client()
 
 

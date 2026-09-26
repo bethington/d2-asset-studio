@@ -168,6 +168,8 @@ def api_items():
 			"shared_by": len(group.get((it["invfile"] or "").lower(), [])),
 			"invwidth": it["invwidth"], "invheight": it["invheight"],
 			"invtransform": it["invtransform"],
+			# an ACTIVE tint (valid colour code + base InvTrans), not just a non-blank cell
+			"tinted": _inv_tint_palette(it) is not None,
 			"active": assets.active_choice(it["id"]),
 			"alts": assets.list_alternates(it["id"]),
 			"flippyfile": it["flippyfile"],
@@ -242,8 +244,12 @@ def api_current_png(item_id):
 
 @flask_app.get("/api/item/<path:item_id>/alt/<alt_id>.png")
 def api_alt_png(item_id, alt_id):
+	it = _item(item_id)
 	try:
-		png = assets.dc6_to_png_bytes(assets.alt_dc6_bytes(item_id, alt_id))
+		# same tint the gallery tile (current.png) applies: the game recolours whichever DC6 is
+		# active, so an alternate must preview tinted too (its base art is tintless)
+		png = assets.dc6_to_png_bytes(assets.alt_dc6_bytes(item_id, alt_id),
+		                              palette=_inv_tint_palette(it) if it else None)
 	except Exception as e:  # noqa: BLE001
 		return f"render error: {e}", 500
 	return Response(png, mimetype="image/png")
@@ -647,7 +653,8 @@ def api_alt_cell_preview(item_id, alt_id):
 	outline = request.args.get("outline", "1") not in ("0", "false")
 	try:
 		png = assets.cell_preview_png(render, it["invwidth"], it["invheight"], fill=fill, dx=dx, dy=dy,
-		                              grade=grade, even_border=even, rot=rot, outline=outline)
+		                              grade=grade, even_border=even, rot=rot, outline=outline,
+		                              palette=_inv_tint_palette(it), thin=_is_thin(it))
 	except Exception as e:  # noqa: BLE001
 		return f"preview error: {e}", 500
 	return Response(png, mimetype="image/png")
@@ -2327,11 +2334,12 @@ _CAPTION_JOBS: dict[str, str] = {}   # item_id -> "running" | "error:<msg>"
 _CAPTION_LOCK = _threading.Lock()
 
 
-def _original_png_for(it: dict) -> bytes:
-	"""The same art the gallery shows as `original.png` (tinted uniques included)."""
-	pal = None
-	if it["category"] in ("unique", "set") and it.get("invtransform"):
-		pal = assets.item_transform_palette(it.get("inv_trans", 0), it["invtransform"])
+def _original_png_for(it: dict, *, tinted: bool = True) -> bytes:
+	"""The same art the gallery shows as `original.png` (tinted uniques included).
+
+	`tinted=False` is the tintless stock art -- what the generator and captioner are fed, so the
+	art they produce carries no tint; each item sharing the DC6 applies its own at display time."""
+	pal = _inv_tint_palette(it) if tinted else None
 	return assets.dc6_to_png_bytes(
 		assets.read_original_dc6(it.get("stock_invfile") or it["invfile"]), palette=pal)
 
@@ -2459,7 +2467,7 @@ def api_boots_split(item_id):
 	src = upscale_store.variant_png(store, vid, "master") if vid else None
 	source = f"variant {vid}" if src else "original"
 	if src is None:
-		src = _original_png_for(it)
+		src = _original_png_for(it, tinted=False)
 	r = boot_split.split(src)
 	if not r["ok"]:
 		return jsonify({"ok": False, "error": r["error"]}), 422
@@ -2612,7 +2620,7 @@ def api_upscale_generate(item_id):
 	if method in ("sdxl_lock", "flux_lock") and not restyle:
 		return jsonify({"ok": False, "error": "describe the new look first"}), 400
 	try:
-		orig = _original_png_for(it)
+		orig = _original_png_for(it, tinted=False)   # tintless in -> tintless out (see docstring)
 		t = (it.get("type") or "").lower()
 		cat = "gem" if t in _GEM_TYPES else "glow" if t in _GLOW_TYPES else "control"
 		identity = (describe.get(item_id) or {}).get("text") or _fallback_identity(it)
@@ -2718,7 +2726,7 @@ def api_upscale_accept2d_preview(item_id):
 		dc6_bytes = assets.png_to_item_dc6(png, it["invwidth"], it["invheight"], fill=fill,
 		                                   dx=dx, dy=dy, rot=rot, grade=grade,
 		                                   thin=_is_thin(it), even_border=even, outline=outline)
-		out = assets.dc6_to_png_bytes(dc6_bytes)
+		out = assets.dc6_to_png_bytes(dc6_bytes, palette=_inv_tint_palette(it))
 	except Exception as e:  # noqa: BLE001
 		return f"preview error: {e}", 500
 	return Response(out, mimetype="image/png")
@@ -2867,7 +2875,7 @@ def api_describe_generate(item_id):
 
 	def _job():
 		try:
-			png = _original_png_for(it)
+			png = _original_png_for(it, tinted=False)   # the caption drives the generation prompt
 			describe.caption_and_store(item_id, png, ts=_time.time(), overwrite_user=force,
 			                           item_name=it.get("name"), item_kind=it.get("type"))
 			with _CAPTION_LOCK:

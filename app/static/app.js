@@ -605,13 +605,15 @@ function renderItemBig(it, choice, wrap, { sprite = false } = {}) {
     img.className = "pix";
     img.src = `/api/item/${id}/original.png`;
     lbl.textContent = "original · in-game sprite";
-  } else if (sprite) {
+  } else if (sprite || it.tinted) {
     // the actual in-game DC6 sprite (reflects framing/size/grade) — shown after an Apply so the
-    // change is visible, unlike the hi-res master which refit never alters.
+    // change is visible, unlike the hi-res master which refit never alters. A tinted unique/set
+    // always lands here: the game's tint is a palette-index remap of the 8-bit sprite, which the
+    // untinted hi-res master can't show (the server tints alt/<id>.png).
     const c = encodeURIComponent(choice);
     img.classList.add("pix");
     img.src = `/api/item/${id}/alt/${c}.png?t=${Date.now()}`;
-    lbl.textContent = `${choice} · in-game sprite`;
+    lbl.textContent = `${choice} · in-game sprite${it.tinted ? " · tinted" : ""}`;
   } else {
     const c = encodeURIComponent(choice);
     img.src = `/api/item/${id}/alt/${c}/render.png`;          // hi-res source master

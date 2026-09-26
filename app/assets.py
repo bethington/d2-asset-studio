@@ -739,20 +739,34 @@ def refit_alt(item_id: str, alt_id: str, invwidth: int, invheight: int,
 def cell_preview_png(png_bytes: bytes, invwidth: int, invheight: int, *,
                      fill: float, dx: float, dy: float, scale: int = 4,
                      grade: dict | None = None, even_border: bool = False,
-                     rot: float = 0.0, outline: bool = True) -> bytes:
+                     rot: float = 0.0, outline: bool = True,
+                     palette=None, thin: bool = False) -> bytes:
 	"""Composite a render into its actual inventory cell (reddish bg + grid) at the given
 	fill/dx/dy/rot (+ optional color grade), scaled up for a crisp UI preview. `even_border` shows
 	the continuous-rim toggle live (the framing preview otherwise carries no outline).
 	Rotation happens in the same order as png_to_item_dc6 (grade -> rotate -> fit) so the preview
-	matches what accepting actually produces."""
+	matches what accepting actually produces.
+
+	`palette` = an item_transform_palette() tint for a tinted unique/set. The game recolours the
+	8-bit sprite by palette-index remap, which a hi-res RGBA can't show, so the tinted preview is
+	the real sprite: the render is round-tripped through the shipping path (png_to_item_dc6, hence
+	`thin`) and drawn with the tinted palette."""
 	from PIL import ImageDraw
 	if grade:
-		png_bytes = color_grade(png_bytes, **{k: float(v) for k, v in grade.items()
-		                                     if k in ("brightness", "warmth", "saturation", "contrast", "hue")})
-	png_bytes = rotate_png(png_bytes, rot)
-	fitted = fit_png_to_cell(png_bytes, invwidth, invheight, fill=fill, dx=dx, dy=dy)
-	if outline:
-		fitted = add_edge_outline(fitted, even=even_border)
+		grade = {k: float(v) for k, v in grade.items()
+		         if k in ("brightness", "warmth", "saturation", "contrast", "hue")}
+	if palette is not None:
+		dc6_bytes = png_to_item_dc6(png_bytes, invwidth, invheight, fill=fill, dx=dx, dy=dy, rot=rot,
+		                            grade=grade or None, thin=thin, even_border=even_border,
+		                            outline=outline)
+		fitted = Image.open(io.BytesIO(dc6_to_png_bytes(dc6_bytes, palette=palette))).convert("RGBA")
+	else:
+		if grade:
+			png_bytes = color_grade(png_bytes, **grade)
+		png_bytes = rotate_png(png_bytes, rot)
+		fitted = fit_png_to_cell(png_bytes, invwidth, invheight, fill=fill, dx=dx, dy=dy)
+		if outline:
+			fitted = add_edge_outline(fitted, even=even_border)
 	cell = fitted.resize((fitted.width * scale, fitted.height * scale), Image.NEAREST)
 	bg = Image.new("RGBA", cell.size, (46, 20, 20, 255))
 	d = ImageDraw.Draw(bg)
