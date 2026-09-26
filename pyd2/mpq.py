@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.wintypes as wt
+import logging
 import os
+import re
 import threading
+import time
 
 _DEFAULT_DLL = os.path.join(os.path.dirname(__file__), "..", "bin", "StormLib.dll")
 
@@ -207,26 +210,166 @@ class MpqArchive:
 			lib.SFileCloseFile(hf)
 
 
-# PD2 effective priority order, highest first (see AssetStudioPlan.md §3.1).
-# Loose data\ overlay outranks all of these at runtime.
-PD2_SEARCH_ORDER = [
-	r"C:\Diablo2\ProjectD2\pd2data.mpq",
-	r"C:\Diablo2\ProjectD2\pd2assets.mpq",
-	r"C:\Diablo2\ProjectD2\pd2maps.mpq",
-	r"C:\Diablo2\ProjectD2\patch_d2.mpq",
-	r"C:\Diablo2\patch_d2.mpq",
-	r"C:\Diablo2\d2exp.mpq",
-	r"C:\Diablo2\d2data.mpq",
-	r"C:\Diablo2\d2char.mpq",
-]
+# PD2 effective priority order, highest first (see AssetStudioPlan.md §3.1). The NAMES and their
+# relative priority are known; WHERE they live comes from PD2_GAME (configure() below), so a moved
+# install or a differently-rooted game folder just works. Loose data\ overlay outranks all of these
+# at runtime.
+_KNOWN_PD2 = ("pd2data.mpq", "pd2assets.mpq", "pd2maps.mpq", "patch_d2.mpq")   # in <root>\ProjectD2\
+_KNOWN_ROOT = ("patch_d2.mpq", "d2exp.mpq", "d2data.mpq", "d2char.mpq")         # in <root>\
+# Names that could plausibly carry item data. Audio/video archives (d2music, d2speech, ...) are
+# ignored, so only a new pd2*/patch* archive triggers the "unrecognised archive" warning.
+_WATCH_NAME = re.compile(r"^(pd2|patch)", re.IGNORECASE)
+
+log = logging.getLogger("pyd2.mpq")
+
+_CONFIG = {"game": None, "extra": []}
+PD2_DIR = ""
+D2_ROOT = ""
+PD2_SEARCH_ORDER: list = []
+_UNKNOWN_LOGGED = None
 
 
-# Read-only base archives are static for the whole session, but opening one of D2's large MPQs
-# costs ~100ms+. The old code opened+closed EVERY archive on EVERY read, so a char graphic (in the
-# last archive, d2char.mpq) cost ~1s. Cache the open handles instead; a global lock serializes the
-# (now fast) reads since one StormLib handle isn't safe for concurrent access.
+# Read-only base archives are static WHILE THE GAME IS UNCHANGED, but opening one of D2's large
+# MPQs costs ~100ms+. The old code opened+closed EVERY archive on EVERY read, so a char graphic (in
+# the last archive, d2char.mpq) cost ~1s. Cache the open handles instead; a global lock serializes
+# the (now fast) reads since one StormLib handle isn't safe for concurrent access. A game update
+# replaces those files, so refresh_if_changed() drops the handles (and every registered derived
+# cache) when any archive's size/mtime changes.
 _OPEN_ARCHIVES = {}
 _MPQ_LOCK = threading.Lock()
+_CHANGE_CALLBACKS: list = []
+_GENERATION = 0
+_LAST_FP = None
+_LAST_CHECK = 0.0
+
+
+def configure(pd2_game: str, extra=()) -> None:
+	"""Point the archive search at an install: `pd2_game` is its Game.exe (ProjectD2\\Game.exe),
+	`extra` are additional archives to read first (see studio_config.PD2_EXTRA_MPQS)."""
+	global PD2_DIR, D2_ROOT, PD2_SEARCH_ORDER, _LAST_FP, _LAST_CHECK, _UNKNOWN_LOGGED
+	pd2_dir = os.path.dirname(os.path.abspath(pd2_game))
+	root = os.path.dirname(pd2_dir)
+	extras = [os.path.abspath(p) for p in extra]
+	with _MPQ_LOCK:
+		PD2_DIR, D2_ROOT = pd2_dir, root
+		PD2_SEARCH_ORDER = (extras
+		                    + [os.path.join(pd2_dir, n) for n in _KNOWN_PD2]
+		                    + [os.path.join(root, n) for n in _KNOWN_ROOT])
+		_CONFIG.update(game=pd2_game, extra=extras)
+		_LAST_FP, _LAST_CHECK, _UNKNOWN_LOGGED = None, 0.0, None
+	_warn_unknown()
+
+
+def unknown_archives() -> list:
+	"""pd2*/patch* archives in the game folders that are NOT in the search order. They are not
+	read (their priority is unknown); the caller should surface them, not ignore them."""
+	known = {os.path.normcase(os.path.abspath(p)) for p in PD2_SEARCH_ORDER}
+	out = []
+	for d in (PD2_DIR, D2_ROOT):
+		try:
+			names = sorted(os.listdir(d))
+		except OSError:
+			continue
+		for n in names:
+			p = os.path.join(d, n)
+			if n.lower().endswith(".mpq") and _WATCH_NAME.match(n) \
+					and os.path.normcase(os.path.abspath(p)) not in known:
+				out.append(p)
+	return out
+
+
+def _warn_unknown() -> None:
+	global _UNKNOWN_LOGGED
+	unknown = tuple(unknown_archives())
+	if unknown and unknown != _UNKNOWN_LOGGED:
+		log.warning("Unrecognised PD2 archive(s) NOT being read: %s. If they carry game data, list "
+		            "them in PD2_EXTRA_MPQS (highest priority first, separated by %r).",
+		            ", ".join(unknown), os.pathsep)
+	_UNKNOWN_LOGGED = unknown
+
+
+def fingerprint() -> tuple:
+	"""(path, size, mtime_ns) of every archive in the search order plus any unrecognised one;
+	(path, None) when absent. Two stats per archive -- cheap enough to run on every request."""
+	fp = []
+	for p in list(PD2_SEARCH_ORDER) + unknown_archives():
+		try:
+			st = os.stat(p)
+		except OSError:
+			fp.append((p, None))
+		else:
+			fp.append((p, st.st_size, st.st_mtime_ns))
+	return tuple(fp)
+
+
+def on_change(fn):
+	"""Register `fn()` to run after a game update is detected (clear whatever you derived from
+	MPQ data). Runs outside the MPQ lock, so it may itself call read_effective()."""
+	_CHANGE_CALLBACKS.append(fn)
+	return fn
+
+
+def generation() -> int:
+	"""Bumped each time a change to the game files is detected."""
+	return _GENERATION
+
+
+def refresh_if_changed(min_interval: float = 1.0) -> bool:
+	"""If any game archive changed since the last look: close the cached handles, bump the
+	generation, run the on_change callbacks. Returns True when that happened. The first call after
+	configure() only records the baseline. Looks at most once per `min_interval` seconds."""
+	global _LAST_FP, _LAST_CHECK, _GENERATION
+	now = time.monotonic()
+	with _MPQ_LOCK:
+		if _LAST_FP is not None and now - _LAST_CHECK < min_interval:
+			return False
+		_LAST_CHECK = now
+		fp = fingerprint()
+		if _LAST_FP is None:
+			_LAST_FP = fp
+			return False
+		if fp == _LAST_FP:
+			return False
+		_LAST_FP = fp
+		for arc in _OPEN_ARCHIVES.values():
+			try:
+				arc.close()
+			except Exception:  # noqa: BLE001 - a dead handle must not block the refresh
+				pass
+		_OPEN_ARCHIVES.clear()
+		_GENERATION += 1
+		callbacks = list(_CHANGE_CALLBACKS)
+	log.warning("Game archives changed on disk -- reopened, derived caches cleared (generation %d)",
+	            _GENERATION)
+	_warn_unknown()
+	for cb in callbacks:
+		try:
+			cb()
+		except Exception:  # noqa: BLE001
+			log.exception("on_change callback %r failed", cb)
+	return True
+
+
+def status() -> dict:
+	"""What Studio is reading, for a UI/status endpoint."""
+	archives = []
+	for p in PD2_SEARCH_ORDER:
+		try:
+			st = os.stat(p)
+		except OSError:
+			continue
+		archives.append({"path": p, "size": st.st_size, "mtime": st.st_mtime})
+	return {"generation": _GENERATION, "game": _CONFIG["game"], "archives": archives,
+	        "missing": [p for p in PD2_SEARCH_ORDER if not os.path.exists(p)],
+	        "unknown": unknown_archives()}
+
+
+try:
+	from studio_config import PD2_EXTRA_MPQS, PD2_GAME
+except ImportError:  # pyd2 used outside the repo root
+	PD2_GAME = os.environ.get("PD2_GAME") or r"C:\Diablo2\ProjectD2\Game.exe"
+	PD2_EXTRA_MPQS = [p for p in (os.environ.get("PD2_EXTRA_MPQS") or "").split(os.pathsep) if p]
+configure(PD2_GAME, PD2_EXTRA_MPQS)
 
 
 def read_effective(name: str, search_order=None) -> tuple[bytes, str]:
@@ -234,6 +377,7 @@ def read_effective(name: str, search_order=None) -> tuple[bytes, str]:
 
 	Returns (data, archive_path). Raises FileNotFoundError if absent everywhere.
 	"""
+	refresh_if_changed()   # a game update since the last read? reopen before serving stale data
 	with _MPQ_LOCK:
 		for arc_path in search_order or PD2_SEARCH_ORDER:
 			if not os.path.exists(arc_path):

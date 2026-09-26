@@ -32,7 +32,8 @@ All settings are environment variables. The defaults match the author's machine.
 |---|---|---|
 | `ASSET_STUDIO_WS` | `<repo>/workspace` (gitignored) | Workspace: alternates, overlay, exports, prompts, upscales. The launch scripts pass it to the game so D2Debugger finds `autoload.txt`. |
 | `D2MOO_ROOT` | `C:\Users\benam\source\cpp\D2MOO` | `build-1.13c` launcher, patch dir and D2Debugger for the `scripts/*.ps1` launchers |
-| `PD2_GAME` | `C:\Diablo2\ProjectD2\Game.exe` | Game the launchers start |
+| `PD2_GAME` | `C:\Diablo2\ProjectD2\Game.exe` | Game the launchers start. Also locates the MPQs Studio reads (`ProjectD2\` and its parent), so a moved install just works |
+| `PD2_EXTRA_MPQS` | (none) | Extra archives to read first, highest priority first, `;`-separated. For a PD2 release that adds an archive Studio doesn't recognise (it logs a warning naming it instead of guessing) |
 | `ASSET_STUDIO_PORT` | `5001` | Web UI port |
 | `STORMLIB_DLL` | `bin/StormLib.dll` | StormLib location |
 | `BLENDER_EXE` / `CHROME_EXE` | auto-detected | Blender renders / the Meshy logged-in Chrome |
