@@ -2,10 +2,7 @@
 # (-direct + debugger on :8790). Self-elevates (1 UAC). Also restores patch_d2.mpq
 # from the Asset Studio backup if one exists (belt-and-suspenders: leave stock MPQs clean).
 $ErrorActionPreference = 'Stop'
-$root     = 'C:\Users\benam\source\cpp\D2MOO'
-$game     = 'C:\Diablo2\ProjectD2\Game.exe'
-$launcher = "$root\build-1.13c\external\D2.Detours\source\Release\D2.DetoursLauncher.exe"
-$patchDir = "$root\build-1.13c\patch"
+. "$PSScriptRoot\_paths.ps1"   # $root $game $launcher $patchDir $workspace
 $built    = "$root\build-1.13c\source\D2Debugger\Release\D2Debugger.dll"
 $builtPdb = "$root\build-1.13c\source\D2Debugger\Release\D2Debugger.pdb"
 $pd2patch = 'C:\Diablo2\ProjectD2\patch_d2.mpq'

@@ -15,10 +15,12 @@ from __future__ import annotations
 import base64
 import json
 import os
+import sys
 import re
 import urllib.request
 
-WORKSPACE = os.environ.get("ASSET_STUDIO_WS", r"C:\Diablo2\AssetStudio")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from studio_config import WORKSPACE  # noqa: E402
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://10.0.10.30:11434").rstrip("/")
 VISION_MODEL = os.environ.get("DESCRIBE_MODEL", "qwen2.5vl:7b")
 STORE = os.path.join(WORKSPACE, "descriptions.json")

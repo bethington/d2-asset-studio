@@ -415,7 +415,6 @@ if __name__ == "__main__":
     import sys
 
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    os.environ.setdefault("ASSET_STUDIO_WS", "C:/Diablo2/AssetStudio")
     import app.assets as A  # noqa: E402
     from PIL import Image  # noqa: E402
 

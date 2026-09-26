@@ -1,0 +1,7 @@
+# Core: everything app/ imports (python app/server.py). Tested on Python 3.13, Windows x64.
+flask>=3.1
+pillow>=12.0
+numpy>=2.0
+scipy>=1.14            # alpha/edge ops in assets.py, glove_pairs.py
+scikit-image>=0.24     # SSIM in the fidelity QA gate (fidelity_score.py)
+websocket-client>=1.8  # Meshy web-session driver (meshy_web.py, via Chrome CDP)

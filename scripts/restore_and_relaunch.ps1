@@ -1,10 +1,7 @@
 # Restore patch_d2.mpq from the Asset Studio backup and relaunch the standard
 # conformance game (no -direct). Self-elevates (1 UAC).
 $ErrorActionPreference = 'Stop'
-$root     = 'C:\Users\benam\source\cpp\D2MOO'
-$game     = 'C:\Diablo2\ProjectD2\Game.exe'
-$launcher = "$root\build-1.13c\external\D2.Detours\source\Release\D2.DetoursLauncher.exe"
-$patchDir = "$root\build-1.13c\patch"
+. "$PSScriptRoot\_paths.ps1"   # $root $game $launcher $patchDir $workspace
 $patch    = 'C:\Diablo2\ProjectD2\patch_d2.mpq'
 $bak      = 'C:\Diablo2\ProjectD2\patch_d2.mpq.assetstudio-bak'
 

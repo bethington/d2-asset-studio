@@ -8,8 +8,39 @@ overlay. No base MPQ edits are needed.
 Split out of [D2MOO](https://github.com/bethington/D2MOO) (`tools/asset-studio/`) on 2026-09-25.
 The live-reload, spawn and hover endpoints the studio calls are still part of D2MOO's
 **D2Debugger** (`:8790`, `source/D2Debugger/src/D2Debugger.assetreload.cpp`), so running
-against the game needs a D2MOO `build-1.13c` build. Several `scripts/*.ps1` expect that
-checkout at `C:\Users\benam\source\cpp\D2MOO` (`$root`).
+against the game needs a D2MOO `build-1.13c` build (located via `D2MOO_ROOT`, below).
+
+## Setup
+
+1. Python 3.13 (x64): `pip install -r requirements.txt`. For local background cutting, lab
+   scripts and tests: `pip install -r requirements-extras.txt`.
+2. **StormLib**: build [StormLib](https://github.com/ladislav-zezula/StormLib) x64 with
+   `-DBUILD_SHARED_LIBS=ON -DSTORM_USE_BUNDLED_LIBRARIES=ON` and copy `StormLib.dll` to `bin/`
+   (or point `STORMLIB_DLL` at it). This is required for all MPQ reads and `patch.mpq` builds.
+3. A D2MOO checkout with the `build-1.13c` conformance build (D2.Detours launcher + D2Debugger)
+   and Project Diablo 2 installed. These are only needed to push to and reload the live game.
+   Browsing, importing and generating work without them.
+4. Optional: Blender (Meshy → sprite renders), and a box running ComfyUI / Ollama / the PNG
+   upscaler for the AI lanes.
+5. `python app/server.py` → http://127.0.0.1:5001
+
+## Configuration
+
+All settings are environment variables. The defaults match the author's machine.
+
+| Variable | Default | Used for |
+|---|---|---|
+| `ASSET_STUDIO_WS` | `<repo>/workspace` (gitignored) | Workspace: alternates, overlay, exports, prompts, upscales. The launch scripts pass it to the game so D2Debugger finds `autoload.txt`. |
+| `D2MOO_ROOT` | `C:\Users\benam\source\cpp\D2MOO` | `build-1.13c` launcher, patch dir and D2Debugger for the `scripts/*.ps1` launchers |
+| `PD2_GAME` | `C:\Diablo2\ProjectD2\Game.exe` | Game the launchers start |
+| `ASSET_STUDIO_PORT` | `5001` | Web UI port |
+| `STORMLIB_DLL` | `bin/StormLib.dll` | StormLib location |
+| `BLENDER_EXE` / `CHROME_EXE` | auto-detected | Blender renders / the Meshy logged-in Chrome |
+| `COMFY_URL`, `OLLAMA_URL`, `PNG_UPSCALE_URL` | `http://10.0.10.30:{8188,11434,8084}` | AI backends |
+| `COMFY_*_CKPT`, `COMFY_QWEN_GGUF`, `COMFY_REMBG_MODEL`, `DESCRIBE_MODEL` | see `app/comfy.py`, `app/describe.py` | Model choices |
+
+Python reads these through `studio_config.py`. The PowerShell launchers read them through
+`scripts/_paths.ps1`.
 
 ## Layout
 
@@ -26,6 +57,6 @@ checkout at `C:\Users\benam\source\cpp\D2MOO` (`$root`).
 
 ## Local, untracked
 
-- `bin/StormLib.dll`: x64 StormLib build (gitignored), required by `pyd2/mpq.py`.
-- `_fidelity_out/`: lab and report output (gitignored).
-- Workspace (alternates + manifest): `ASSET_STUDIO_WS`, default `C:\Diablo2\AssetStudio`.
+- `workspace/`: the default workspace. This is your generated art, so back it up. `git clean -fdx` deletes it.
+- `bin/StormLib.dll`: x64 StormLib build, required by `pyd2/mpq.py`.
+- `_fidelity_out/`: lab and report output.

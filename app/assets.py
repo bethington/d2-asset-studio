@@ -22,7 +22,7 @@ from pyd2 import dc6  # noqa: E402
 from pyd2.mpq import read_effective, build_archive  # noqa: E402
 from pyd2.palette import load_pal_dat, frame_to_rgba  # noqa: E402
 
-WORKSPACE = os.environ.get("ASSET_STUDIO_WS", r"C:\Diablo2\AssetStudio")
+from studio_config import WORKSPACE  # noqa: E402
 OVERLAY = os.path.join(WORKSPACE, "overlay")
 ALTERNATES = os.path.join(WORKSPACE, "alternates")
 EXPORT_MPQ = os.path.join(WORKSPACE, "export", "patch.mpq")

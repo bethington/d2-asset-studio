@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import subprocess
 import time
 import urllib.request
@@ -21,7 +22,8 @@ import urllib.request
 import websocket  # websocket-client
 
 WEB = "https://api.meshy.ai/web"
-WORKSPACE = os.environ.get("ASSET_STUDIO_WS", r"C:\Diablo2\AssetStudio")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from studio_config import WORKSPACE  # noqa: E402
 PROFILE_DIR = os.path.join(WORKSPACE, "chrome-meshy-studio")
 PORT = int(os.environ.get("MESHY_STUDIO_PORT", "9233"))
 LOGIN_URL = "https://www.meshy.ai/workspace?model-tab=image-to-3d"

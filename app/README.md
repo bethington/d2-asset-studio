@@ -29,8 +29,8 @@ in-game (`census/APP_LOOP_WORKS_magenta_potions.png`).
 ## Run
 
 ```
-pip install flask pillow numpy        # StormLib.dll must be in ../bin (built already)
-python app/server.py                  # -> http://127.0.0.1:5001
+pip install -r requirements.txt      # from the repo root; StormLib.dll must be in bin/ (see ../README.md)
+python app/server.py                  # -> http://127.0.0.1:5001 (ASSET_STUDIO_PORT overrides)
 ```
 Start PD2 with the debugger first (D2MOO's conformance/tools/relaunch_pd2.ps1 or
 scripts/relaunch_pd2_direct.ps1) so the :8790 AssetReload endpoint is up.

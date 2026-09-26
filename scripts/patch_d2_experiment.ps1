@@ -2,10 +2,7 @@
 # overlay into patch_d2.mpq (priority 5000), relaunch PD2 with -direct + debugger.
 # Reversible: patch_d2.mpq.assetstudio-bak holds the original. Self-elevates (1 UAC).
 $ErrorActionPreference = 'Stop'
-$root     = 'C:\Users\benam\source\cpp\D2MOO'
-$game     = 'C:\Diablo2\ProjectD2\Game.exe'
-$launcher = "$root\build-1.13c\external\D2.Detours\source\Release\D2.DetoursLauncher.exe"
-$patchDir = "$root\build-1.13c\patch"
+. "$PSScriptRoot\_paths.ps1"   # $root $game $launcher $patchDir $workspace
 $tool     = Split-Path -Parent $PSScriptRoot   # d2-asset-studio repo root
 
 $principal = New-Object Security.Principal.WindowsPrincipal(

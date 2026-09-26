@@ -1,0 +1,5 @@
+# Optional: local background cutting, lab scripts, tests.
+-r requirements.txt
+rembg>=2.0     # local bg cut fallback (comfy.py; scripts/diagnose_bgcut.py) -- pulls onnxruntime
+hqx            # scripts/upscale4x_lab.py only
+pytest>=8

@@ -2884,7 +2884,8 @@ def _warm_char_archives():
 
 
 if __name__ == "__main__":
-	print("PD2 Asset Studio -> http://127.0.0.1:5001")
+	_port = int(os.environ.get("ASSET_STUDIO_PORT", "5001"))
+	print(f"PD2 Asset Studio -> http://127.0.0.1:{_port}")
 	import threading as _threading
 	_threading.Thread(target=_warm_char_archives, daemon=True).start()
-	flask_app.run(host="127.0.0.1", port=5001, debug=False, threaded=True)
+	flask_app.run(host="127.0.0.1", port=_port, debug=False, threaded=True)

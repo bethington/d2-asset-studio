@@ -11,8 +11,8 @@ Reuses app.server's module-level wiring (assets.register_item_resolver at import
 in the REAL bucket the live UI reads, per the gem-fidelity-lab publish-bug lesson) and its exact
 accept-2d/activate helpers, so results are identical to clicking through the UI, just batched.
 
-Run from this repo with ASSET_STUDIO_WS pointed at the workspace:
-    ASSET_STUDIO_WS="C:\\Diablo2\\AssetStudio" python scripts/gen_all_gem_methods.py
+Run from the repo root (workspace = studio_config.WORKSPACE, i.e. ASSET_STUDIO_WS or ./workspace):
+    python scripts/gen_all_gem_methods.py
 Resumable: skips any (item, method) this batch already produced (meta.batch == BATCH_TAG).
 """
 from __future__ import annotations
