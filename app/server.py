@@ -2671,15 +2671,16 @@ def api_upscale_variant_delete(item_id, vid):
 def _accept2d_source(item_id, vid):
 	"""(item, vid, master_png) for a §2 accept-as-art, or (None, err) on failure. The master is
 	the ~1024px BiRefNet-cut RGBA — already background-free — so fitting it to the cell is all
-	that's left. Falls back to the canonical (2x) PNG if no master is on disk."""
+	that's left. Falls back to the canonical (2x) PNG if no master is on disk. Shared-invfile
+	items read the variants of the sibling that owns them (same as the variant PNG route)."""
 	it = _item(item_id)
 	if not it:
 		return None, "no such item"
-	idx = upscale_store.load(item_id)
+	owner_id, idx, _inherited = _variant_owner(it)
 	vid = vid or idx.get("selected")
 	if not vid:
 		return None, "no variant selected (generate or pick one in §2 first)"
-	png = upscale_store.variant_png(item_id, vid, "master") or upscale_store.variant_png(item_id, vid, "canonical")
+	png = upscale_store.variant_png(owner_id, vid, "master") or upscale_store.variant_png(owner_id, vid, "canonical")
 	if png is None:
 		return None, f"variant {vid} has no image on disk"
 	return it, vid, png
@@ -2726,7 +2727,7 @@ def api_upscale_accept2d(item_id):
 	rot = float(body.get("rot") or 0.0)
 	even = bool(body.get("even_border"))
 	outline = bool(body.get("outline", True))
-	rec = next((v for v in upscale_store.load(item_id).get("variants", []) if v["id"] == vid), {})
+	rec = next((v for v in _variant_owner(it)[1].get("variants", []) if v["id"] == vid), {})
 	# explicit UI grade wins over the global accept-brightness default; hue passes straight through
 	grade = {**(_accept_grade() or {}), **(body.get("grade") or {})} or None
 	try:
