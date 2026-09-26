@@ -847,14 +847,16 @@ def _drop_body_for(it, quality: str | None):
 	# base -> plain base item.
 	if quality is None:
 		if it["category"] == "unique":
-			row = unique_row(it["name"])
+			row = unique_row(it["name"], it["code"])
 			if row is None:
 				return None, f"couldn't resolve uniqueitems row for {it['name']!r}"
 			body.update({"uniqueRow": row["row"], "identify": True})
 			return body, f"{it['name']} (unique, identified)"
 		if it["category"] == "set":
 			from app.catalog import set_pieces
-			match = next((p for p in set_pieces(it["name"]) if p["index"].lower() == it["name"].lower()), None)
+			match = next((p for p in set_pieces(it["name"])
+			              if p["index"].lower() == it["name"].lower()
+			              and p["base"].lower() == it["code"].lower()), None)
 			if match is None:
 				return None, f"couldn't resolve setitems row for {it['name']!r}"
 			identify = it["type"] not in _SET_JEWELRY_TYPES  # jewelry sets stay unID'd (crash guard)

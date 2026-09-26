@@ -99,7 +99,7 @@ def set_pieces(set_query: str):
 	return out
 
 
-def unique_row(index_name: str):
+def unique_row(index_name: str, base: str | None = None):
 	"""Return the game's compiled uniqueitems row index for a unique by its `index` (name), or None.
 
 	Like set_pieces(), the game's uniqueitems array (from the .bin) is 0-based over the rows the
@@ -107,14 +107,18 @@ def unique_row(index_name: str):
 	raw CSV row number is off past that point. We count a running index over kept rows to get the
 	game row, which is what the /showcase/item {code, uniqueRow} verb forces (uniqueRow = that row;
 	`code` must be the unique's base item code).
+
+	A name can repeat on different base items (Azurewrath, Crackleshot): pass the catalog item's
+	base `code` to get the first row of that name AND base; without it, the first row of the name.
 	"""
 	q = (index_name or "").strip().lower()
+	want_base = (base or "").strip().lower()
 	game_idx = 0
 	for r in _read_table("uniqueitems"):
 		index = _clean(r.get("index"))
 		if not index or index.lower() == "expansion":
 			continue  # a dropped separator row -- does NOT advance the game index
-		if index.lower() == q:
+		if index.lower() == q and (not want_base or _clean(r.get("code")).lower() == want_base):
 			return {"row": game_idx, "index": index, "base": _clean(r.get("code")),
 			        "lvl": _clean(r.get("lvl"))}
 		game_idx += 1
@@ -131,10 +135,38 @@ def _base_art(binfo, quality_key):
 	return binfo.get(quality_key) or binfo["invfile"]
 
 
+class _IdBook:
+	"""Hands out catalog ids for unique/set rows, some of which share an `index` name.
+
+	Item ids key stored data (workspace/upscales, gen_prompts.json, meshy_links.json), so the FIRST
+	row with a name keeps the bare id. A later row with the same base item, art and tint is an exact
+	repeat of an earlier one and gets no item (claim() -> None). A later row that differs gets
+	`<bare>#<base code>` (`-2`, `-3`... if that id is taken too). Txt row order keeps it stable."""
+
+	def __init__(self):
+		self._looks = {}     # bare id -> [(code, invfile, invtransform), ...] already given an item
+		self._taken = set()
+
+	def claim(self, bare: str, code: str, invfile: str, invtransform: str):
+		look = (code.lower(), invfile.lower(), invtransform.lower())
+		looks = self._looks.setdefault(bare, [])
+		if look in looks:
+			return None
+		looks.append(look)
+		item_id = bare if len(looks) == 1 else f"{bare}#{code}"
+		n = 1
+		while item_id in self._taken:
+			n += 1
+			item_id = f"{bare}#{code}-{n}"
+		self._taken.add(item_id)
+		return item_id
+
+
 def build_catalog():
 	"""Return (items, by_code). items: list of dicts; by_code: base code -> base item."""
 	items = []
 	by_code = {}
+	ids = _IdBook()
 
 	# --- base items ---
 	for table in BASE_TABLES:
@@ -215,8 +247,12 @@ def build_catalog():
 			invfile = _clean(r.get("invfile")) or _base_art(binfo, "unique_invfile")
 			if not invfile:
 				continue
+			invtransform = _clean(r.get("invtransform"))
+			item_id = ids.claim(f"unique/{index}", base, invfile, invtransform)
+			if item_id is None:      # exact repeat of an earlier row of the same name
+				continue
 			items.append({
-				"id": f"unique/{index}",
+				"id": item_id,
 				"category": "unique",
 				"table": "uniqueitems",
 				"name": index,
@@ -225,7 +261,7 @@ def build_catalog():
 				"flippyfile": binfo["flippyfile"] if binfo else "",
 				"invwidth": binfo["invwidth"] if binfo else 2,
 				"invheight": binfo["invheight"] if binfo else 2,
-				"invtransform": _clean(r.get("invtransform")),
+				"invtransform": invtransform,
 				"type": binfo["type"] if binfo else "",
 				"family": binfo["family"] if binfo else base,
 				"tier": binfo["tier"] if binfo else 0,
@@ -245,8 +281,12 @@ def build_catalog():
 			invfile = _clean(r.get("invfile")) or _base_art(binfo, "set_invfile")
 			if not invfile:
 				continue
+			invtransform = _clean(r.get("invtransform"))
+			item_id = ids.claim(f"set/{index}", base, invfile, invtransform)
+			if item_id is None:      # exact repeat of an earlier row of the same name
+				continue
 			items.append({
-				"id": f"set/{index}",
+				"id": item_id,
 				"category": "set",
 				"table": "setitems",
 				"name": index,
@@ -255,7 +295,7 @@ def build_catalog():
 				"flippyfile": binfo["flippyfile"] if binfo else "",
 				"invwidth": binfo["invwidth"] if binfo else 2,
 				"invheight": binfo["invheight"] if binfo else 2,
-				"invtransform": _clean(r.get("invtransform")),
+				"invtransform": invtransform,
 				"type": binfo["type"] if binfo else "",
 				"family": binfo["family"] if binfo else base,
 				"tier": binfo["tier"] if binfo else 0,
