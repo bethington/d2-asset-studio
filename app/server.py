@@ -114,6 +114,14 @@ def _variant_owner(it):
 	return it["id"], own, None
 
 
+def _store_id(item_id):
+	"""Id of the upscale store that reads AND writes must use for item_id (variants, selection,
+	meshy chain, boot splits). Writing to the item's own store while reads resolve through
+	_variant_owner forks a new history for an inheriting item and hides its siblings' images."""
+	it = _item(item_id)
+	return _variant_owner(it)[0] if it else item_id
+
+
 # Bucket alternates by the DC6 file items share (invfile/flippyfile) rather than per item:
 # every item whose inventory graphic resolves to the same .dc6 shares one pool + one active
 # choice. Resolver reads the LIVE catalog so a studio invfile edit re-buckets automatically.
@@ -2445,22 +2453,23 @@ def api_boots_split(item_id):
 	it = _item(item_id)
 	if not it:
 		return jsonify({"ok": False, "error": "no such item"}), 404
-	idx = upscale_store.load(item_id)
+	store = _store_id(item_id)
+	idx = upscale_store.load(store)
 	vid = (request.json or {}).get("vid") or idx.get("selected")
-	src = upscale_store.variant_png(item_id, vid, "master") if vid else None
+	src = upscale_store.variant_png(store, vid, "master") if vid else None
 	source = f"variant {vid}" if src else "original"
 	if src is None:
 		src = _original_png_for(it)
 	r = boot_split.split(src)
 	if not r["ok"]:
 		return jsonify({"ok": False, "error": r["error"]}), 422
-	os.makedirs(upscale_store._dir(item_id), exist_ok=True)
-	with open(_boot_side_path(item_id, "left"), "wb") as f:
+	os.makedirs(upscale_store._dir(store), exist_ok=True)
+	with open(_boot_side_path(store, "left"), "wb") as f:
 		f.write(r["left"])
-	with open(_boot_side_path(item_id, "right"), "wb") as f:
+	with open(_boot_side_path(store, "right"), "wb") as f:
 		f.write(r["right"])
 	idx["boots"] = {"method": r["method"], "confidence": r["confidence"], "source": source}
-	upscale_store._write(item_id, idx)
+	upscale_store._write(store, idx)
 	return jsonify({"ok": True, "boots": idx["boots"]})
 
 
@@ -2468,7 +2477,7 @@ def api_boots_split(item_id):
 def api_boot_side_png(item_id, side):
 	if side not in ("left", "right"):
 		return "bad side", 400
-	p = _boot_side_path(item_id, side)
+	p = _boot_side_path(_store_id(item_id), side)
 	if not os.path.exists(p):
 		return "not split yet", 404
 	with open(p, "rb") as f:
@@ -2479,13 +2488,14 @@ def api_boot_side_png(item_id, side):
 def api_upscale_meshy_save(item_id):
 	"""Persist the panel's Meshy chain state (draft/texture task ids, phase) into the item's
 	upscale index so the panel survives reloads and server restarts."""
-	idx = upscale_store.load(item_id)
+	store = _store_id(item_id)
+	idx = upscale_store.load(store)
 	cur = idx.get("meshy") or {}
 	cur.update({k: v for k, v in (request.json or {}).items()
 	            if k in ("draft_tid", "texture_tid", "phase", "source_vid", "alt_id",
 	                     "alt_item", "boots_mode", "engine")})
 	idx["meshy"] = cur
-	upscale_store._write(item_id, idx)
+	upscale_store._write(store, idx)
 	return jsonify({"ok": True, "meshy": cur})
 
 
@@ -2514,11 +2524,12 @@ def api_studio_generate_upscale():
 	it = _item(item_id)
 	if not it:
 		return jsonify({"ok": False, "error": "no such item"}), 404
-	idx = upscale_store.load(item_id)
+	store = _store_id(item_id)
+	idx = upscale_store.load(store)
 	vid = body.get("vid") or idx.get("selected")
 	if not vid:
 		return jsonify({"ok": False, "error": "no upscale variant selected (generate one first)"}), 400
-	master = upscale_store.variant_png(item_id, vid, "master")
+	master = upscale_store.variant_png(store, vid, "master")
 	if master is None:
 		return jsonify({"ok": False, "error": f"variant {vid} has no master image"}), 404
 	boots_mode = body.get("boots_mode")
@@ -2527,21 +2538,21 @@ def api_studio_generate_upscale():
 			# ensure a split exists for this variant (re-split when the source changed)
 			cur = idx.get("boots") or {}
 			if cur.get("source") != f"variant {vid}" or \
-			   not os.path.exists(_boot_side_path(item_id, "left")):
+			   not os.path.exists(_boot_side_path(store, "left")):
 				r = boot_split.split(master)
 				if not r["ok"]:
 					return jsonify({"ok": False, "error": f"boot split failed: {r['error']}"}), 422
-				os.makedirs(upscale_store._dir(item_id), exist_ok=True)
-				with open(_boot_side_path(item_id, "left"), "wb") as f:
+				os.makedirs(upscale_store._dir(store), exist_ok=True)
+				with open(_boot_side_path(store, "left"), "wb") as f:
 					f.write(r["left"])
-				with open(_boot_side_path(item_id, "right"), "wb") as f:
+				with open(_boot_side_path(store, "right"), "wb") as f:
 					f.write(r["right"])
 				idx["boots"] = {"method": r["method"], "confidence": r["confidence"],
 				                "source": f"variant {vid}"}
-			with open(_boot_side_path(item_id, "left"), "rb") as f:
+			with open(_boot_side_path(store, "left"), "rb") as f:
 				left = f.read()
 			if boots_mode == "multi":
-				with open(_boot_side_path(item_id, "right"), "rb") as f:
+				with open(_boot_side_path(store, "right"), "rb") as f:
 					right = f.read()
 				sprite = [assets.prep_image_for_meshy(left), assets.prep_image_for_meshy(right)]
 			else:
@@ -2553,7 +2564,7 @@ def api_studio_generate_upscale():
 		tid = _draft_from_sprite(it, sprite, body.get("opts") or {}, source)
 		idx["meshy"] = {"draft_tid": tid, "phase": "draft", "source_vid": vid,
 		                **({"boots_mode": boots_mode} if boots_mode else {})}
-		upscale_store._write(item_id, idx)
+		upscale_store._write(store, idx)
 	except Exception as e:  # noqa: BLE001
 		return jsonify({"ok": False, "error": str(e)}), 502
 	return jsonify({"ok": True, "task_id": tid, "phase": "draft", "source_vid": vid,
@@ -2629,7 +2640,8 @@ def api_upscale_generate(item_id):
 		w, h = meta.pop("size")
 		canonical = comfy.to_canonical_2x(master, (it["invwidth"] * assets.CELL_PX,
 		                                            it["invheight"] * assets.CELL_PX))
-		rec = upscale_store.add_variant(item_id, master_png=master, canonical_png=canonical,
+		store = _store_id(item_id)
+		rec = upscale_store.add_variant(store, master_png=master, canonical_png=canonical,
 		                                meta={**meta, "method": method, "score": scores,
 		                                      "size": [w, h], "ts": _time.time()})
 		gen_prompts.update(item_id, {"nudge": nudge, "restyle": restyle, "negative": negative,
@@ -2638,7 +2650,7 @@ def api_upscale_generate(item_id):
 		return jsonify({"ok": False, "error": str(e)}), 400
 	except Exception as e:  # noqa: BLE001
 		return jsonify({"ok": False, "error": str(e)}), 500
-	return jsonify({"ok": True, "variant": rec, "upscale": upscale_store.load(item_id)})
+	return jsonify({"ok": True, "variant": rec, "upscale": upscale_store.load(store)})
 
 
 @flask_app.get("/api/upscale/<path:item_id>/variant/<vid>.png")
@@ -2660,12 +2672,12 @@ def api_upscale_variant_png(item_id, vid):
 @flask_app.post("/api/upscale/<path:item_id>/select")
 def api_upscale_select(item_id):
 	vid = (request.json or {}).get("vid")
-	return jsonify({"ok": True, "upscale": upscale_store.select_variant(item_id, vid)})
+	return jsonify({"ok": True, "upscale": upscale_store.select_variant(_store_id(item_id), vid)})
 
 
 @flask_app.delete("/api/upscale/<path:item_id>/variant/<vid>")
 def api_upscale_variant_delete(item_id, vid):
-	return jsonify({"ok": True, "upscale": upscale_store.delete_variant(item_id, vid)})
+	return jsonify({"ok": True, "upscale": upscale_store.delete_variant(_store_id(item_id), vid)})
 
 
 def _accept2d_source(item_id, vid):
