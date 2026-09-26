@@ -88,17 +88,39 @@ def _cstr(data: bytes, off: int, length: int = STR_LEN) -> str:
 	return data[off:off + length].split(b"\x00", 1)[0].decode("latin-1")
 
 
+OFF_CODE = 0x28   # uint32 base item code: 4 ASCII chars, space padded -- same offset in both records
+_CODE_SUFFIX = re.compile(r"^(?P<name>.+)#(?P<code>[A-Za-z0-9]{1,4})$")
+
+
+def _row_code(data: bytes, rec: int) -> str:
+	return data[rec + OFF_CODE:rec + OFF_CODE + 4].split(b"\x00", 1)[0].decode("latin-1").strip().lower()
+
+
 def find_row(data: bytes, unique_name: str, tbl: Table = UNIQUE_TABLE) -> int:
+	"""Row index of an edit key: a bare name (the FIRST row with that name) or `Name#code` (the
+	first row of that name on that base item). Several rows share a name -- Azurewrath and
+	Crackleshot each exist on two base items -- and the catalog's `edit_key` says which one an
+	edit is for; a bare name keeps meaning the first row, so existing edits are unchanged. A name
+	that literally contains `#code` is matched as written first."""
 	n = _check(data, tbl)
 	want = unique_name.strip()
-	for i in range(n):
-		if _cstr(data, 4 + i * tbl.rec_size + OFF_NAME) == want:
-			return i
-	# tolerate case drift between txt and bin
-	want_l = want.lower()
-	for i in range(n):
-		if _cstr(data, 4 + i * tbl.rec_size + OFF_NAME).lower() == want_l:
-			return i
+
+	def scan(name: str, code: str | None, fold: bool) -> int:
+		name = name.lower() if fold else name
+		for i in range(n):
+			rec = 4 + i * tbl.rec_size
+			row = _cstr(data, rec + OFF_NAME)
+			if (row.lower() if fold else row) == name and (code is None or _row_code(data, rec) == code):
+				return i
+		return -1
+
+	m = _CODE_SUFFIX.match(want)
+	for fold in (False, True):        # exact first, then tolerate case drift between txt and bin
+		hit = scan(want, None, fold)
+		if hit < 0 and m:
+			hit = scan(m["name"].strip(), m["code"].lower(), fold)
+		if hit >= 0:
+			return hit
 	return -1
 
 

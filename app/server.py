@@ -63,8 +63,8 @@ def catalog():
 		# "original" renders fall back to what the item inherited before the edit
 		over = excel.unique_overrides()
 		for it in items:
-			if it["category"] == "unique" and it["name"] in over:
-				o = over[it["name"]]
+			if it["category"] == "unique" and _ekey(it) in over:
+				o = over[_ekey(it)]
 				if o.get("invfile"):
 					if o["invfile"] != it["invfile"]:
 						it["stock_invfile"] = it["invfile"]
@@ -76,7 +76,7 @@ def catalog():
 		# live tint edits (uniques + sets): 'none' = the studio cleared the tint (-1)
 		tints = {"unique": excel.tint_overrides("uniqueitems"), "set": excel.tint_overrides("setitems")}
 		for it in items:
-			t = tints.get(it["category"], {}).get(it["name"])
+			t = tints.get(it["category"], {}).get(_ekey(it))
 			if t and "invtransform" in t:
 				it["invtransform"] = "" if t["invtransform"] == "none" else t["invtransform"]
 		_CATALOG["items"] = items
@@ -93,6 +93,13 @@ def catalog():
 def invalidate_catalog():
 	_CATALOG["items"] = None
 	_CATALOG["by_id"] = {}
+
+
+def _ekey(it):
+	"""The key .bin edits (app/excel.py) use for a unique/set item: its bare name for the first row
+	of a name, `Name#code` for a later row (e.g. unique/Azurewrath#7cr) -- never just the name, or
+	an edit meant for one Azurewrath would patch the other."""
+	return it.get("edit_key") or it["name"]
 
 
 # A game update (any MPQ changing on disk) drops every cache derived from MPQ data, then re-runs
@@ -477,7 +484,7 @@ def _tint_state(it):
 	"""The item's current .bin tint (colour codes, '' = none) plus whether each side can render:
 	the inventory tint needs the base's InvTrans 1..8, the on-body tint its `Transform` 1..8."""
 	from pyd2 import chars, colortransform
-	t = excel.get_tint(_TINT_TABLES[it["category"]], it["name"])
+	t = excel.get_tint(_TINT_TABLES[it["category"]], _ekey(it))
 	if t is None:
 		return None
 	t["colors"] = list(colortransform.COLOR_CODES)   # colors.txt order, for the picker
@@ -498,7 +505,7 @@ def api_txt_get(item_id):
 		return jsonify({"ok": False, "error": f"{it['name']!r} not found in {_TINT_TABLES[it['category']]}.bin"}), 404
 	if it["category"] == "set":
 		return jsonify({"ok": True, "tint": tint})
-	u = excel.get_unique(it["name"])
+	u = excel.get_unique(_ekey(it))
 	if not u:
 		return jsonify({"ok": False, "error": f"{it['name']!r} not found in uniqueitems.bin"}), 404
 	u.update({"ok": True, "effective_invfile": it["invfile"],
@@ -513,7 +520,7 @@ def _api_tint_set(it, body):
 	if any(v is not None and not isinstance(v, str) for v in sides.values()):
 		return jsonify({"ok": False, "error": "inv/chr must be a colour code, 'none' or 'stock'"}), 400
 	try:
-		excel.set_tint(_TINT_TABLES[it["category"]], it["name"], **sides)
+		excel.set_tint(_TINT_TABLES[it["category"]], _ekey(it), **sides)
 	except (ValueError, KeyError) as e:
 		return jsonify({"ok": False, "error": str(e)}), 400
 	invalidate_catalog()
@@ -545,7 +552,7 @@ def api_txt_set(item_id):
 	value = (body.get("value") or "").strip()
 	old_file = it["invfile"] if fld == "invfile" else it["flippyfile"]
 	try:
-		u = excel.set_unique_field(it["name"], fld, value)
+		u = excel.set_unique_field(_ekey(it), fld, value)
 	except (ValueError, KeyError) as e:
 		return jsonify({"ok": False, "error": str(e)}), 400
 	new_file = u[fld] if value else u[f"stock_{fld}"]
@@ -579,7 +586,7 @@ def api_txt_set(item_id):
 			assets.activate_flippy(item_id, new_file, "seed-original")
 			seeded = True
 	invalidate_catalog()
-	u = excel.get_unique(it["name"])
+	u = excel.get_unique(_ekey(it))
 	u.update({"ok": True, "seeded": seeded, "effective_invfile": _item(item_id)["invfile"],
 	          "effective_flippyfile": _item(item_id)["flippyfile"],
 	          "note": "push + Full reload for the change to reach the game "

@@ -1763,3 +1763,8 @@ MPQs. The gaps were freshness and stored art/edits, closed as follows (code in `
   show the list's first graphic for those 43 uniques/sets; the mismatch is expected, not a bug.
   Method: spawn into the inventory, `POST :8790/capture/frame` for a clean frame, diff against the
   previous frame to isolate the new sprite, then pixel-match candidate DC6s (RMSE 0.0 = exact).
+- **Edit keys for shared names.** `.bin` edits are keyed by the catalog item's `edit_key`: the bare
+  name for the first row of a name (so every existing manifest edit means what it always did) and
+  `Name#code` for a later row that differs (`unique/Azurewrath#7cr`). `excel.find_row` resolves
+  `Name#code` through the base item code at record offset 0x28 (both tables). A `#code-N` id (a third
+  distinct row on one base) has no edit key yet; none exists in the data.

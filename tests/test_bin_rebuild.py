@@ -36,6 +36,7 @@ def make_bin(tbl, rows):
 	for r in rows:
 		rec = bytearray(tbl.rec_size)
 		rec[excel.OFF_NAME:excel.OFF_NAME + 32] = r["name"].encode("latin-1").ljust(32, b"\0")
+		rec[0x28:0x2C] = r.get("code", "").encode("latin-1").ljust(4, b" ")   # base item code (both tables)
 		if tbl is U:
 			rec[excel.OFF_FLIPPY:excel.OFF_FLIPPY + 32] = r.get("flippy", "").encode().ljust(32, b"\0")
 			rec[excel.OFF_INVFILE:excel.OFF_INVFILE + 32] = r.get("invfile", "").encode().ljust(32, b"\0")
@@ -85,6 +86,29 @@ def w(monkeypatch):
 		assets._save_manifest({"version": 1, "assets": {}, "owned_overlay_files": []})
 	reset()
 	yield world
+	reset()
+
+
+@pytest.fixture
+def w_live():
+	"""The real server + live PD2 tables (read-only) against the throw-away workspace."""
+	if not os.path.abspath(assets.WORKSPACE).startswith(os.path.abspath(tempfile.gettempdir())):
+		pytest.skip("workspace is not a throw-away temp dir; refusing to reset its manifest")
+	try:
+		import app.server as server
+		server.catalog()
+	except Exception as e:  # noqa: BLE001 - no MPQs / StormLib on this machine
+		pytest.skip(f"PD2 MPQs unavailable: {e}")
+
+	def reset():
+		for t in (U, S):
+			p = excel._overlay_bin_path(t)
+			if os.path.exists(p):
+				os.remove(p)
+		assets._save_manifest({"version": 1, "assets": {}, "owned_overlay_files": []})
+		server.invalidate_catalog()
+	reset()
+	yield server, server.flask_app.test_client()
 	reset()
 
 
@@ -182,3 +206,105 @@ def test_build_patch_mpq_rederives_bins_before_packing(w, monkeypatch):
 	monkeypatch.setattr(assets, "build_archive", lambda *a, **k: calls.append("packed"))
 	assets.build_patch_mpq()
 	assert calls == ["rebuilt", "packed"]
+
+
+# ---- rows that share a name: an edit must hit the row it was made for --------------------------
+# uniqueitems has names on several rows (Azurewrath and Crackleshot each exist on TWO base items).
+# Edits are keyed by the catalog item's `edit_key`: the bare name = the FIRST row of that name (so
+# existing manifest edits keep working untouched), `Name#code` = the first row of that name on that
+# base item.
+
+TWINS = [
+	{"name": "Twin", "code": "crs", "invfile": "invcrsu", "flippy": "flpa", "chr": 0xFF, "inv": 0xFF},
+	{"name": "Other", "code": "cap", "invfile": "invo", "flippy": "flpo", "chr": 0xFF, "inv": 0xFF},
+	{"name": "Twin", "code": "7cr", "invfile": "invcrs", "flippy": "flpb", "chr": 0xFF, "inv": 0xFF}]
+
+
+def _twins(w):
+	w.stock[U.name] = make_bin(U, TWINS)
+
+
+def _changed_rows(stock, cur, n):
+	sz = U.rec_size
+	return [i for i in range(n) if stock[4 + i * sz:4 + (i + 1) * sz] != cur[4 + i * sz:4 + (i + 1) * sz]]
+
+
+def test_find_row_resolves_a_name_and_a_name_hash_code(w):
+	_twins(w)
+	data = w.stock[U.name]
+	assert excel.find_row(data, "Twin") == 0                    # bare name: the FIRST row
+	assert excel.find_row(data, "Twin#crs") == 0
+	assert excel.find_row(data, "Twin#7cr") == 2                # ...or the row on that base
+	assert excel.find_row(data, "twin#7CR") == 2                # case-insensitive like a bare name
+	assert excel.find_row(data, "Twin#zzz") == -1
+	assert excel.find_row(data, "Other#7cr") == -1              # right code, wrong name
+
+
+def test_a_name_that_literally_contains_hash_code_still_wins(w):
+	w.stock[U.name] = make_bin(U, [{"name": "Odd#abc", "code": "cap"}, {"name": "Odd", "code": "abc"}])
+	assert excel.find_row(w.stock[U.name], "Odd#abc") == 0
+
+
+def test_an_edit_keyed_by_hash_code_touches_only_that_row(w):
+	_twins(w)
+	excel.set_unique_field("Twin#7cr", "invfile", "mine")
+	assert excel.get_unique("Twin#7cr")["invfile"] == "mine"
+	assert excel.get_unique("Twin")["invfile"] == "invcrsu"      # the first Twin is untouched
+	assert excel.unique_overrides() == {"Twin#7cr": {"invfile": "mine"}}
+	assert _changed_rows(w.stock[U.name], w.overlay(U), 3) == [2], "only the 7cr row may differ"
+
+
+def test_a_bare_name_edit_keeps_targeting_the_first_row(w):
+	"""Existing manifests only have bare names: they must mean exactly what they always meant."""
+	_twins(w)
+	excel.set_unique_field("Twin", "invfile", "mine")
+	assert _changed_rows(w.stock[U.name], w.overlay(U), 3) == [0]
+
+
+def test_tint_edits_use_the_same_keys(w):
+	_twins(w)
+	excel.set_tint(U.name, "Twin#7cr", inv="cred")
+	assert excel.get_tint(U.name, "Twin#7cr")["inv"] == "cred"
+	assert excel.get_tint(U.name, "Twin")["inv"] == ""
+	assert excel.tint_overrides(U.name) == {"Twin#7cr": {"invtransform": "cred"}}
+
+
+def test_a_hash_code_edit_follows_its_row_when_the_game_reorders_the_table(w):
+	_twins(w)
+	excel.set_unique_field("Twin#7cr", "invfile", "mine")
+	w.stock[U.name] = make_bin(U, [TWINS[2], TWINS[1], TWINS[0], {"name": "New", "code": "cap"}])  # update
+	rep = excel.rebuild_overlay_bins()
+	assert rep[U.name]["applied"] == ["Twin#7cr"] and rep[U.name]["missing"] == []
+	cur = w.overlay(U)
+	assert excel._cstr(cur, 4 + 0 * U.rec_size + excel.OFF_INVFILE) == "mine"    # the 7cr row, now first
+	assert excel._cstr(cur, 4 + 2 * U.rec_size + excel.OFF_INVFILE) == "invcrsu"  # the crs row, untouched
+	assert excel.edit_report() == {}
+
+
+def test_a_hash_code_edit_for_a_vanished_base_is_reported_not_misapplied(w):
+	_twins(w)
+	excel.set_unique_field("Twin#7cr", "invfile", "mine")
+	w.stock[U.name] = make_bin(U, [TWINS[0], TWINS[1]])                  # the 7cr row is gone
+	rep = excel.rebuild_overlay_bins()
+	assert rep[U.name]["missing"] == ["Twin#7cr"] and rep[U.name]["applied"] == []
+	assert not os.path.exists(excel._overlay_bin_path(U)), "must NOT fall back to editing the first Twin"
+
+
+def test_the_server_edits_the_picked_azurewrath_not_the_first(w_live):
+	"""Live PD2 data: Azurewrath is on two base items (crs, 7cr). A tint edit on the 7cr item must
+	patch that row only and show on that item only."""
+	from urllib.parse import quote
+	server, client = w_live
+	first, second = "unique/Azurewrath", "unique/Azurewrath#7cr"
+	by = server.catalog()["by_id"]
+	assert by[first]["code"] != by[second]["code"]
+	assert by[second]["edit_key"] == "Azurewrath#" + by[second]["code"] and by[first]["edit_key"] == "Azurewrath"
+	r = client.post(f"/api/item/{quote(second, safe='')}/txt", json={"field": "tint", "inv": "cred"})
+	assert r.status_code == 200 and r.get_json()["ok"], r.get_json()
+	by = server.catalog()["by_id"]
+	assert by[second]["invtransform"] == "cred", "the picked item shows its edit"
+	assert by[first]["invtransform"] != "cred", "the other Azurewrath must not"
+	stock, cur = excel.stock_bin(), excel.load_bin()
+	n = int.from_bytes(stock[:4], "little")
+	target = excel.find_row(stock, "Azurewrath#" + by[second]["code"])
+	assert _changed_rows(stock, cur, n) == [target] and target != excel.find_row(stock, "Azurewrath")

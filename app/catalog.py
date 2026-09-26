@@ -253,6 +253,9 @@ def build_catalog():
 				continue
 			items.append({
 				"id": item_id,
+				# what the .bin edit paths (app/excel.py) key this row by: the bare name for the first
+				# row of a name (as it always was), `Name#code` for a later row that differs
+				"edit_key": item_id.split("/", 1)[1],
 				"category": "unique",
 				"table": "uniqueitems",
 				"name": index,
@@ -287,6 +290,7 @@ def build_catalog():
 				continue
 			items.append({
 				"id": item_id,
+				"edit_key": item_id.split("/", 1)[1],
 				"category": "set",
 				"table": "setitems",
 				"name": index,
