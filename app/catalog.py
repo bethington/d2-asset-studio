@@ -115,6 +115,16 @@ def unique_row(index_name: str):
 	return None
 
 
+def _base_art(binfo, quality_key):
+	"""Inventory art a unique/set draws when its own row has no invfile: the base item's
+	`uniqueinvfile` / `setinvfile` (quality_key) if set, else the base `invfile`. Base `cap` is the
+	case that matters: unique/set Caps draw `invcapu` (the feathered war-bonnet), plain Caps and
+	the War Hat/Shako family (blank unique/set art) draw `invcap`."""
+	if not binfo:
+		return ""
+	return binfo.get(quality_key) or binfo["invfile"]
+
+
 def build_catalog():
 	"""Return (items, by_code). items: list of dicts; by_code: base code -> base item."""
 	items = []
@@ -151,6 +161,10 @@ def build_catalog():
 				"type": _clean(r.get("type")),
 				"family": norm or code,  # normcode names the family across all 3 tiers
 				"tier": tier,
+				# The base row's art for its unique / set quality (blank = same as invfile). A
+				# unique/set whose own row has no invfile draws THESE, not `invfile`.
+				"unique_invfile": _clean(r.get("uniqueinvfile")),
+				"set_invfile": _clean(r.get("setinvfile")),
 				# InvTrans = the item-palette transform-file selector (1..8) the game feeds to
 				# D2CMP_MixPalette for the INVENTORY sprite recolor (Items.cpp:3841). Uniques/sets
 				# inherit it from their base; combined with their own `invtransform` colour code it
@@ -167,6 +181,9 @@ def build_catalog():
 				item["row_invfile"] = invfile      # keep what the txt claimed, for reference
 				item["invfile"] = vgfx[0]
 				item["var_invfiles"] = list(vgfx)
+				# How uniqueinvfile/setinvfile interact with the type's graphic list is unverified
+				# in-game, so uniques/sets of these types keep resolving through `invfile` as before.
+				item["unique_invfile"] = item["set_invfile"] = ""
 			items.append(item)
 			by_code.setdefault(code, item)
 			if vgfx:
@@ -187,7 +204,7 @@ def build_catalog():
 			if not index or not base or index.lower() in ("expansion", "index"):
 				continue
 			binfo = by_code.get(base)
-			invfile = _clean(r.get("invfile")) or (binfo["invfile"] if binfo else "")
+			invfile = _clean(r.get("invfile")) or _base_art(binfo, "unique_invfile")
 			if not invfile:
 				continue
 			items.append({
@@ -217,7 +234,7 @@ def build_catalog():
 			if not index or not base:
 				continue
 			binfo = by_code.get(base)
-			invfile = _clean(r.get("invfile")) or (binfo["invfile"] if binfo else "")
+			invfile = _clean(r.get("invfile")) or _base_art(binfo, "set_invfile")
 			if not invfile:
 				continue
 			items.append({
